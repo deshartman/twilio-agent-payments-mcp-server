@@ -1,0 +1,34 @@
+{
+    "name": "empty-mcp-server",
+    "version": "0.1.0",
+    "description": "Empty MCP Server with TypeScript SDK",
+    "main": "build/server.js",
+    "type": "module",
+    "bin": {
+        "twilio-agent-payments-mcp-server": "./build/server.js"
+    },
+    "scripts": {
+        "build": "tsc && chmod +x build/server.js",
+        "start": "node build/server.js",
+        "dev": "ts-node src/server.ts",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "mcp",
+        "server"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.7.0",
+        "events": "^3.3.0",
+        "twilio": "^4.19.0",
+        "zod": "^3.24.2"
+    },
+    "devDependencies": {
+        "@types/node": "^20.10.5",
+        "@types/twilio": "^3.19.3",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.3.3"
+    }
+}
