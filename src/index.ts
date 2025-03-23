@@ -2,7 +2,6 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { logOut, logError } from "./utils/logger.js";
 import { TwilioAgentPaymentServer } from "./api-servers/TwilioAgentPaymentServer.js";
 import { paymentStateStore } from "./utils/paymentStateStore.js";
 import { callbackHandler } from "./utils/callbackHandler.js";
@@ -24,7 +23,7 @@ const statusCallback = `http://localhost:3000`;
 
 // Validate required configuration
 if (!accountSid || !apiKey || !apiSecret) {
-    logError("TwilioAgentPaymentServer", "Missing required configuration parameters");
+    console.error("Missing required configuration parameters");
     console.error("Usage: twilio-agent-payments-mcp-server <accountSid> <apiKey> <apiSecret>");
     process.exit(1);
 }
@@ -117,7 +116,7 @@ mcpServer.tool(
                 ]
             };
         } catch (error) {
-            logError("MCP Server", `Error starting payment capture: ${error}`);
+            console.error(`Error starting payment capture: ${error}`);
             return {
                 content: [
                     {
@@ -186,7 +185,7 @@ mcpServer.tool(
                 ]
             };
         } catch (error) {
-            logError("MCP Server", `Error updating payment field: ${error}`);
+            console.error(`Error updating payment field: ${error}`);
             return {
                 content: [
                     {
@@ -269,7 +268,7 @@ mcpServer.tool(
                 ]
             };
         } catch (error) {
-            logError("MCP Server", `Error resetting payment field: ${error}`);
+            console.error(`Error resetting payment field: ${error}`);
             return {
                 content: [
                     {
@@ -335,7 +334,7 @@ mcpServer.tool(
                 ]
             };
         } catch (error) {
-            logError("MCP Server", `Error completing payment capture: ${error}`);
+            console.error(`Error completing payment capture: ${error}`);
             return {
                 content: [
                     {
@@ -389,7 +388,7 @@ mcpServer.tool(
                 ]
             };
         } catch (error) {
-            logError("MCP Server", `Error getting payment status: ${error}`);
+            console.error(`Error getting payment status: ${error}`);
             return {
                 content: [
                     {
@@ -535,16 +534,15 @@ async function main() {
     try {
         const transport = new StdioServerTransport();
         await mcpServer.connect(transport);
-        logOut("TwilioAgentPaymentServer", "Server started successfully");
     } catch (error) {
-        logError("TwilioAgentPaymentServer", `Error starting server: ${error}`);
+        console.error(`Error starting server: ${error}`);
         process.exit(1);
     }
 }
 
 // Handle clean shutdown
 process.on("SIGINT", async () => {
-    logOut("TwilioAgentPaymentServer", "Shutting down...");
+    console.error("TwilioAgentPaymentServer shutting down...");
     callbackHandler.stop();
     await mcpServer.close();
     process.exit(0);
@@ -552,6 +550,6 @@ process.on("SIGINT", async () => {
 
 // Start the server
 main().catch(error => {
-    logError("TwilioAgentPaymentServer", `Fatal error: ${error}`);
+    console.error(`Fatal error: ${error}`);
     process.exit(1);
 });

@@ -1,5 +1,8 @@
-import { Twilio } from "twilio";
-import { logOut, logError } from '../utils/logger.js';
+// The Twilio package is a CommonJS module, but we're using ES modules (type: "module" in package.json).
+// When importing a CommonJS module in an ES module context, we can't use named imports directly.
+// Instead, we import the entire module as a default import and then extract the named exports.
+import pkg from 'twilio';
+const { Twilio } = pkg;
 import { PaymentCapture, PaymentInstance, PaymentTokenType } from "twilio/lib/rest/api/v2010/account/call/payment.js";
 
 /**
@@ -17,7 +20,7 @@ class TwilioAgentPaymentServer {
     accountSid: string;
     apiKey: string;
     apiSecret: string;
-    twilioClient: Twilio;
+    twilioClient: any; // Using 'any' type for the Twilio client since we don't have proper type definitions
     statusCallback: string;
 
     constructor(accountSid: string, apiKey: string, apiSecret: string, statusCallback: string) {
@@ -42,7 +45,6 @@ class TwilioAgentPaymentServer {
      * @returns The payment session object or null if there was an error
      */
     async startCapture(callSid: string): Promise<PaymentInstance | null> {
-        logOut('TwilioService', `Starting capture for callSID: ${callSid}`);
         // Create the payment session
         const sessionData = {
             idempotencyKey: callSid + Date.now().toString(),
@@ -54,7 +56,6 @@ class TwilioAgentPaymentServer {
             postalCode: false
         }
 
-        logOut('TwilioService', `Starting payment session for callSID: ${callSid} with data: ${JSON.stringify(sessionData)} `);
 
         // Now create the payment session
         try {
@@ -63,7 +64,7 @@ class TwilioAgentPaymentServer {
                 .create(sessionData);
             return paymentSession;
         } catch (error) {
-            logError('TwilioService', `Error with StartCapture for callSID: ${callSid} - ${error} `);
+            console.error(`Error with StartCapture for callSID: ${callSid} - ${error} `);
             return null;
         }
     }
@@ -80,7 +81,7 @@ class TwilioAgentPaymentServer {
         const callResource = await this.twilioClient.calls(callSid).fetch();
 
         if (callResource.status !== 'in-progress') {
-            logError('TwilioService', `startCapture error: Call not in progress for ${callSid}`);
+            console.error(`startCapture error: Call not in progress for ${callSid}`);
             return null;
         }
 
@@ -96,7 +97,7 @@ class TwilioAgentPaymentServer {
 
             return paymentSession; // Pay Object
         } catch (error) {
-            logError('TwilioService', `Error with captureCard for callSID: ${callSid} - ${error} `);
+            console.error(`Error with captureCard for callSID: ${callSid} - ${error} `);
             return null;
         }
 
@@ -120,7 +121,7 @@ class TwilioAgentPaymentServer {
                 });
             return payment;
         } catch (error) {
-            logError('TwilioService', `Error with finishCapture for callSID: ${callSid} - ${error} `);
+            console.error(`Error with finishCapture for callSID: ${callSid} - ${error} `);
             return null;
         }
     }

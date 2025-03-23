@@ -1,12 +1,15 @@
 # Twilio Agent Payments MCP Server
 
-An MCP (Model Context Protocol) server that enables handling agent-assisted payments via the Twilio API.
+An MCP (Model Context Protocol) server that enables handling agent-assisted payments via the Twilio API, with enhanced features for asynchronous callbacks and guided workflow.
 
 ## Features
 
 - Process secure payments during voice calls via Twilio
 - Capture payment card information (card number, security code, expiration date)
 - Tokenize payment information for PCI compliance
+- Asynchronous callbacks via MCP Resources
+- Guided workflow with MCP Prompts
+- Support for re-entry of payment information
 - Integrates with MCP clients like Claude Desktop
 - Secure credential handling
 - Uses Twilio API Keys for improved security
@@ -106,31 +109,188 @@ Once the package is published to npm, you can use the following configuration:
 }
 ```
 
+## Integration with Host Applications
+
+One of the key advantages of the Model Context Protocol (MCP) is that it eliminates the need for extensive manual configuration of LLM context. The MCP server automatically provides all necessary tool definitions, resource templates, and capabilities to the LLM client.
+
+### Setting Up Your Host Application
+
+To integrate this MCP server into your own host application:
+
+1. **Implement an MCP Client**: Use an existing MCP client library or implement the MCP client protocol in your application.
+
+2. **Connect to the MCP Server**: Configure your application to connect to the Twilio Agent Payments MCP server.
+
+3. **Let the Protocol Handle the Rest**: The MCP server will automatically:
+   - Register its tools and resources with your client
+   - Provide input schemas for all tools
+   - Supply contextual prompts to guide the LLM through the payment flow
+
+No manual definition of tools or resources is required in your LLM's context - the MCP protocol handles this discovery automatically.
+
+### Example Integration Code
+
+Here's a simplified example of how to integrate with an MCP client:
+
+```javascript
+// Initialize your MCP client
+const mcpClient = new McpClient();
+
+// Connect to the Twilio Agent Payments MCP server
+await mcpClient.connectToServer({
+  name: "twilio-agent-payments",
+  // Connection details depend on your specific MCP client implementation
+  // This could be a WebSocket URL, stdio connection, or other transport
+});
+
+// The client will automatically discover available tools and resources
+
+// When the LLM wants to use a tool, your application can handle it like this:
+function handleLlmToolRequest(toolRequest) {
+  // The toolRequest would contain:
+  // - server_name: "twilio-agent-payments"
+  // - tool_name: e.g., "startPaymentCapture"
+  // - arguments: e.g., { callSid: "CA1234567890abcdef" }
+  
+  return mcpClient.callTool(toolRequest);
+}
+
+// Similarly for resources:
+function handleLlmResourceRequest(resourceRequest) {
+  // The resourceRequest would contain:
+  // - server_name: "twilio-agent-payments"
+  // - uri: e.g., "payment://CA1234567890abcdef/PA9876543210abcdef/status"
+  
+  return mcpClient.accessResource(resourceRequest);
+}
+```
+
+### Minimal LLM Context Required
+
+The LLM only needs to know that it can use the Twilio Agent Payments MCP server for handling payments. A simple instruction in your system prompt is sufficient:
+
+```
+You have access to a Twilio Agent Payments MCP server that can help process secure payments during voice calls. 
+When a customer wants to make a payment, you can use the tools provided by this server to securely capture 
+payment information while maintaining PCI compliance.
+
+The server will guide you through the payment process with contextual prompts at each step.
+```
+
+The MCP server itself provides all the detailed tool definitions, input schemas, and contextual prompts to guide the LLM through the payment flow.
+
 ## Available Tools
 
-### start-payment-capture
+### startPaymentCapture
 
 Initiates a payment capture process for an active call.
 
 Parameters:
 - `callSid`: The Twilio Call SID for the active call
 
-### update-payment-session
+Returns:
+- `paymentSid`: The Twilio Payment SID for the new payment session
+- `prompt`: A markdown-formatted prompt to guide the LLM through the next steps
 
-Updates a payment session with a specific capture type.
+### updatePaymentField
+
+Updates a payment field with a specific capture type.
 
 Parameters:
 - `callSid`: The Twilio Call SID for the active call
 - `paymentSid`: The Twilio Payment SID for the payment session
 - `captureType`: The type of capture to perform (e.g., 'payment-card-number', 'security-code', 'expiration-date')
 
-### finish-payment-capture
+Returns:
+- `success`: Boolean indicating success
+- `prompt`: A markdown-formatted prompt to guide the LLM through the next steps
+
+### resetPaymentField
+
+Resets a payment field for re-entry when a customer makes a mistake.
+
+Parameters:
+- `callSid`: The Twilio Call SID for the active call
+- `paymentSid`: The Twilio Payment SID for the payment session
+- `field`: The field to reset ('cardNumber', 'securityCode', or 'expirationDate')
+
+Returns:
+- `success`: Boolean indicating success
+- `prompt`: A markdown-formatted prompt to guide the LLM through the re-entry process
+
+### completePaymentCapture
 
 Completes a payment capture session.
 
 Parameters:
 - `callSid`: The Twilio Call SID for the active call
 - `paymentSid`: The Twilio Payment SID for the payment session
+
+Returns:
+- `success`: Boolean indicating success
+- `token`: The payment token (if successful)
+- `prompt`: A markdown-formatted prompt to guide the LLM through completion
+
+### getPaymentStatus
+
+Gets the current status of a payment session.
+
+Parameters:
+- `callSid`: The Twilio Call SID for the active call
+- `paymentSid`: The Twilio Payment SID for the payment session
+
+Returns:
+- Detailed status information about the payment session
+- Current state of all payment fields
+- `prompt`: A markdown-formatted prompt to guide the LLM based on the current state
+
+## Available Resources
+
+### payment://{callSid}/{paymentSid}/status
+
+Get the current status of a payment session as a JSON object.
+
+### payment://{callSid}/{paymentSid}/prompt
+
+Get a markdown-formatted prompt for the current payment state to guide the LLM through the next steps.
+
+## Architecture
+
+This MCP server implements an enhanced architecture for handling payment flows:
+
+### State Management
+
+The server maintains an in-memory state store for payment sessions, tracking:
+- Session status ('initialized', 'in-progress', 'complete', 'error')
+- Card number state (masked value, completion status, re-entry needs)
+- Security code state
+- Expiration date state
+- Payment token (when complete)
+
+### Callback Handling
+
+An Express server handles asynchronous callbacks from Twilio:
+- Listens on the configured port (default: 3000)
+- Processes callbacks for different payment stages
+- Updates the state store based on callback data
+- Handles error conditions and re-entry scenarios
+
+### MCP Resources
+
+Dynamic resources provide access to payment state:
+- `payment://{callSid}/{paymentSid}/status`: Current payment status as JSON
+- `payment://{callSid}/{paymentSid}/prompt`: Contextual prompt for the current state
+
+### MCP Prompts
+
+Contextual prompts guide the LLM through the payment flow:
+- Start capture prompt
+- Card number capture prompt
+- Security code capture prompt
+- Expiration date capture prompt
+- Completion prompt
+- Error handling prompts
+- Re-entry prompts for correction scenarios
 
 ## Development
 
@@ -140,6 +300,12 @@ To build the project:
 npm install
 npm run build
 ```
+
+### Prerequisites
+
+- Node.js 14+
+- Express (for callback handling)
+- Twilio SDK
 
 ### Running the Server Manually
 
@@ -164,3 +330,15 @@ This server helps with PCI compliance by tokenizing payment card information. Th
 ## License
 
 MIT
+
+## MCP Inspector Compatibility
+
+When using this server with the MCP Inspector, note that all logging is done via `console.error()` instead of `console.log()`. This is intentional and necessary for compatibility with the MCP protocol, which uses stdout for JSON communication.
+
+If you're extending this server or debugging issues:
+
+1. Use `console.error()` for all logging to ensure logs go to stderr
+2. Avoid using `console.log()` as it will interfere with the MCP protocol's JSON messages on stdout
+3. Keep logging minimal to avoid cluttering the terminal output
+
+This approach ensures that the MCP Inspector can properly parse the JSON messages exchanged between the server and client without interference from log messages.
