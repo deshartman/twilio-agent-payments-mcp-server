@@ -1,12 +1,5 @@
-// Check if running in an MCP environment
-const isMcpEnvironment = process.argv.length >= 2 && process.argv[2].startsWith('AC');
-
-// Disable colors when running in MCP environment to avoid JSON parsing issues
-const colors = isMcpEnvironment ? {
-    reset: '',
-    green: '',
-    red: ''
-} : {
+// Define console colors
+const colors = {
     reset: '\x1b[0m',
     green: '\x1b[32m',
     red: '\x1b[31m'
