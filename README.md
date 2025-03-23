@@ -19,14 +19,14 @@ An MCP (Model Context Protocol) server that enables handling agent-assisted paym
 You can use this server directly via npx:
 
 ```bash
-npx twilio-agent-payments-mcp-server <accountSid> <apiKey> <apiSecret> <number> <statusCallback>
+npx twilio-agent-payments-mcp-server <accountSid> <apiKey> <apiSecret>
 ```
 
 Or install it globally:
 
 ```bash
 npm install -g twilio-agent-payments-mcp-server
-twilio-agent-payments-mcp-server <accountSid> <apiKey> <apiSecret> <number> <statusCallback>
+twilio-agent-payments-mcp-server <accountSid> <apiKey> <apiSecret>
 ```
 
 ## Configuration
