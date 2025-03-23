@@ -48,7 +48,11 @@ const SERVER_CONFIG = {
     version: "1.0.0"
 };
 
-const mcpServer = new McpServer(SERVER_CONFIG);
+const mcpServer = new McpServer(SERVER_CONFIG, {
+    capabilities: {
+        logging: {}
+    }
+});
 
 // Define schemas for tool inputs
 const startPaymentCaptureSchema = z.object({

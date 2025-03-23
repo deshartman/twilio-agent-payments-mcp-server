@@ -342,3 +342,79 @@ If you're extending this server or debugging issues:
 3. Keep logging minimal to avoid cluttering the terminal output
 
 This approach ensures that the MCP Inspector can properly parse the JSON messages exchanged between the server and client without interference from log messages.
+
+## MCP Server Logging
+
+### Logging Configuration
+
+The Twilio Agent Payments MCP server implements logging capabilities according to the [MCP specification](https://spec.modelcontextprotocol.io/specification/2024-11-05/server/utilities/logging/#capabilities). Logging must be explicitly configured when initializing the MCP server:
+
+```javascript
+const mcpServer = new McpServer(SERVER_CONFIG, {
+    capabilities: {
+        logging: {}
+    }
+});
+```
+
+This configuration is critical - without it, any attempts to use logging functionality will result in runtime errors with messages like:
+
+```
+Error: Server does not support logging (required for notifications/message)
+```
+
+### Event-Based Logging Architecture
+
+The server uses an event-based logging architecture:
+
+1. **Event Emitters**: Both the `CallbackHandler` and `TwilioAgentPaymentServer` classes extend Node.js's `EventEmitter` and emit 'log' events with level and message data.
+
+2. **Log Forwarding**: These events are captured by event listeners and forwarded to the MCP server's logging system:
+
+   ```javascript
+   // Set up event listeners for callback handler logs
+   callbackHandler.on('log', forwardLogToMcp);
+
+   // Set up event listeners for Twilio agent payment server logs
+   twilioAgentPaymentServer.on('log', forwardLogToMcp);
+   ```
+
+3. **MCP Integration**: The `forwardLogToMcp` function transforms these events into MCP-compatible log messages:
+
+   ```javascript
+   const forwardLogToMcp = (data: { level: string, message: string }) => {
+       // Only use valid log levels: info, error, debug
+       // If level is 'warn', treat it as 'info'
+       const mcpLevel = data.level === 'warn' ? 'info' : data.level as "info" | "error" | "debug";
+
+       // Send the log message to the MCP server's underlying Server instance
+       mcpServer.server.sendLoggingMessage({
+           level: mcpLevel,
+           data: data.message,
+       });
+   };
+   ```
+
+### Supported Log Levels
+
+The server supports the following log levels:
+
+- `info`: General information messages
+- `error`: Error messages and exceptions
+- `debug`: Detailed debugging information
+- `warn`: Warning messages (automatically converted to 'info' for MCP compatibility)
+
+### Troubleshooting Logging Issues
+
+If you encounter logging-related errors:
+
+1. **Check MCP Server Configuration**: Ensure the server is initialized with the correct logging capability as shown above.
+
+2. **Verify MCP SDK Version**: Make sure you're using a compatible version of the MCP SDK that supports the logging capability structure.
+
+3. **Inspect Error Messages**: Look for specific error messages that might indicate configuration issues:
+   - `Server does not support logging (required for notifications/message)`: This indicates the logging capability is not properly configured.
+
+4. **Check Event Listeners**: Ensure that event listeners are properly set up to forward logs from your components to the MCP server.
+
+5. **Fallback Logging**: In development environments, you may want to implement fallback logging to console.error() if MCP logging fails, but be aware this can clutter the output.
