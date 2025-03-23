@@ -3,10 +3,12 @@
 // Instead, we import the entire module as a default import and then extract the named exports.
 import pkg from 'twilio';
 const { Twilio } = pkg;
+import { EventEmitter } from 'events';
 import { PaymentCapture, PaymentInstance, PaymentTokenType } from "twilio/lib/rest/api/v2010/account/call/payment.js";
 
 /**
  * Service class for handling Twilio-related agent payment operations.
+ * Extends EventEmitter to emit events that can be consumed by the main application
  * 
  * NOTE: For authentication we are using API Key and Secret. This is not recommended for production use. See https://www.twilio.com/docs/usage/requests-to-twilio
  * 
@@ -16,7 +18,7 @@ import { PaymentCapture, PaymentInstance, PaymentTokenType } from "twilio/lib/re
  * @property {string} apiSecret - Twilio API Secret
  * @property {twilio.Twilio} twilioClient - Initialized Twilio client instance
  */
-class TwilioAgentPaymentServer {
+class TwilioAgentPaymentServer extends EventEmitter {
     accountSid: string;
     apiKey: string;
     apiSecret: string;
@@ -24,6 +26,7 @@ class TwilioAgentPaymentServer {
     statusCallback: string;
 
     constructor(accountSid: string, apiKey: string, apiSecret: string, statusCallback: string) {
+        super();
         this.accountSid = accountSid;
         this.apiKey = apiKey;
         this.apiSecret = apiSecret;
@@ -64,7 +67,8 @@ class TwilioAgentPaymentServer {
                 .create(sessionData);
             return paymentSession;
         } catch (error) {
-            console.error(`Error with StartCapture for callSID: ${callSid} - ${error} `);
+            const message = `Error with StartCapture for callSID: ${callSid} - ${error} `;
+            this.emit('log', { level: 'error', message });
             return null;
         }
     }
@@ -81,7 +85,8 @@ class TwilioAgentPaymentServer {
         const callResource = await this.twilioClient.calls(callSid).fetch();
 
         if (callResource.status !== 'in-progress') {
-            console.error(`startCapture error: Call not in progress for ${callSid}`);
+            const message = `startCapture error: Call not in progress for ${callSid}`;
+            this.emit('log', { level: 'error', message });
             return null;
         }
 
@@ -97,7 +102,8 @@ class TwilioAgentPaymentServer {
 
             return paymentSession; // Pay Object
         } catch (error) {
-            console.error(`Error with captureCard for callSID: ${callSid} - ${error} `);
+            const message = `Error with captureCard for callSID: ${callSid} - ${error} `;
+            this.emit('log', { level: 'error', message });
             return null;
         }
 
@@ -121,7 +127,8 @@ class TwilioAgentPaymentServer {
                 });
             return payment;
         } catch (error) {
-            console.error(`Error with finishCapture for callSID: ${callSid} - ${error} `);
+            const message = `Error with finishCapture for callSID: ${callSid} - ${error} `;
+            this.emit('log', { level: 'error', message });
             return null;
         }
     }

@@ -1,16 +1,19 @@
 import express from 'express';
+import { EventEmitter } from 'events';
 import { paymentStateStore } from './paymentStateStore.js';
 import { PaymentCapture } from 'twilio/lib/rest/api/v2010/account/call/payment.js';
 
 /**
  * Callback handler for Twilio payment callbacks
+ * Extends EventEmitter to emit events that can be consumed by the main application
  */
-class CallbackHandler {
+class CallbackHandler extends EventEmitter {
     private app: express.Application;
     private port: number;
     private server: any;
 
     constructor(port: number = 3000) {
+        super();
         this.port = port;
         this.app = express();
 
@@ -27,7 +30,8 @@ class CallbackHandler {
      */
     start(): void {
         this.server = this.app.listen(this.port, () => {
-            console.error(`Callback server listening on port ${this.port}`);
+            const message = `Callback server listening on port ${this.port}`;
+            this.emit('log', { level: 'info', message });
         });
     }
 
@@ -37,7 +41,8 @@ class CallbackHandler {
     stop(): void {
         if (this.server) {
             this.server.close();
-            console.error('Callback server stopped');
+            const message = 'Callback server stopped';
+            this.emit('log', { level: 'info', message });
         }
     }
 
@@ -59,7 +64,8 @@ class CallbackHandler {
                 // Send a success response
                 res.status(200).send('OK');
             } catch (error) {
-                console.error(`Error processing callback: ${error}`);
+                const message = `Error processing callback: ${error}`;
+                this.emit('log', { level: 'error', message });
                 res.status(500).send('Error processing callback');
             }
         });
@@ -92,7 +98,8 @@ class CallbackHandler {
                 this.handleFinishCaptureCallback(callSid, paymentSid, body);
                 break;
             default:
-                console.error(`Unknown callback type: ${lastCall}`);
+                const message = `Unknown callback type: ${lastCall}`;
+                this.emit('log', { level: 'error', message });
         }
     }
 
@@ -121,7 +128,8 @@ class CallbackHandler {
         const session = paymentStateStore.getSession(callSid, paymentSid);
 
         if (!session) {
-            console.error(`Session not found for call ${callSid}, payment ${paymentSid}`);
+            const message = `Session not found for call ${callSid}, payment ${paymentSid}`;
+            this.emit('log', { level: 'error', message });
             return;
         }
 
@@ -133,7 +141,8 @@ class CallbackHandler {
                 attempts: session.cardNumber.attempts + 1
             });
 
-            console.error(`Error capturing card number: ${body.ErrorMessage}`);
+            const message = `Error capturing card number: ${body.ErrorMessage}`;
+            this.emit('log', { level: 'error', message });
             return;
         }
 
@@ -157,7 +166,8 @@ class CallbackHandler {
         const session = paymentStateStore.getSession(callSid, paymentSid);
 
         if (!session) {
-            console.error(`Session not found for call ${callSid}, payment ${paymentSid}`);
+            const message = `Session not found for call ${callSid}, payment ${paymentSid}`;
+            this.emit('log', { level: 'error', message });
             return;
         }
 
@@ -169,7 +179,8 @@ class CallbackHandler {
                 attempts: session.securityCode.attempts + 1
             });
 
-            console.error(`Error capturing security code: ${body.ErrorMessage}`);
+            const message = `Error capturing security code: ${body.ErrorMessage}`;
+            this.emit('log', { level: 'error', message });
             return;
         }
 
@@ -193,7 +204,8 @@ class CallbackHandler {
         const session = paymentStateStore.getSession(callSid, paymentSid);
 
         if (!session) {
-            console.error(`Session not found for call ${callSid}, payment ${paymentSid}`);
+            const message = `Session not found for call ${callSid}, payment ${paymentSid}`;
+            this.emit('log', { level: 'error', message });
             return;
         }
 
@@ -205,7 +217,8 @@ class CallbackHandler {
                 attempts: session.expirationDate.attempts + 1
             });
 
-            console.error(`Error capturing expiration date: ${body.ErrorMessage}`);
+            const message = `Error capturing expiration date: ${body.ErrorMessage}`;
+            this.emit('log', { level: 'error', message });
             return;
         }
 
@@ -235,7 +248,8 @@ class CallbackHandler {
                 body.ErrorMessage || 'Error completing payment capture'
             );
 
-            console.error(`Error completing payment capture: ${body.ErrorMessage}`);
+            const message = `Error completing payment capture: ${body.ErrorMessage}`;
+            this.emit('log', { level: 'error', message });
             return;
         }
 

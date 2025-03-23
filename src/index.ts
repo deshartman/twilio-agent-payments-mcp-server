@@ -116,7 +116,8 @@ mcpServer.tool(
                 ]
             };
         } catch (error) {
-            console.error(`Error starting payment capture: ${error}`);
+            // Log the error
+            forwardLogToMcp({ level: 'error', message: `Error starting payment capture: ${error}` });
             return {
                 content: [
                     {
@@ -185,7 +186,8 @@ mcpServer.tool(
                 ]
             };
         } catch (error) {
-            console.error(`Error updating payment field: ${error}`);
+            // Log the error
+            forwardLogToMcp({ level: 'error', message: `Error updating payment field: ${error}` });
             return {
                 content: [
                     {
@@ -268,7 +270,8 @@ mcpServer.tool(
                 ]
             };
         } catch (error) {
-            console.error(`Error resetting payment field: ${error}`);
+            // Log the error
+            forwardLogToMcp({ level: 'error', message: `Error resetting payment field: ${error}` });
             return {
                 content: [
                     {
@@ -334,7 +337,8 @@ mcpServer.tool(
                 ]
             };
         } catch (error) {
-            console.error(`Error completing payment capture: ${error}`);
+            // Log the error
+            forwardLogToMcp({ level: 'error', message: `Error completing payment capture: ${error}` });
             return {
                 content: [
                     {
@@ -388,7 +392,8 @@ mcpServer.tool(
                 ]
             };
         } catch (error) {
-            console.error(`Error getting payment status: ${error}`);
+            // Log the error
+            forwardLogToMcp({ level: 'error', message: `Error getting payment status: ${error}` });
             return {
                 content: [
                     {
@@ -526,6 +531,25 @@ mcpServer.prompt(
     }
 );
 
+// Helper function to forward logs to the MCP server
+const forwardLogToMcp = (data: { level: string, message: string }) => {
+    // Only use valid log levels: info, error, debug
+    // If level is 'warn', treat it as 'info'
+    const mcpLevel = data.level === 'warn' ? 'info' : data.level as "info" | "error" | "debug";
+
+    // Send the log message to the MCP server's underlying Server instance
+    mcpServer.server.sendLoggingMessage({
+        level: mcpLevel,
+        data: data.message,
+    });
+};
+
+// Set up event listeners for callback handler logs
+callbackHandler.on('log', forwardLogToMcp);
+
+// Set up event listeners for Twilio agent payment server logs
+twilioAgentPaymentServer.on('log', forwardLogToMcp);
+
 // Start the callback handler
 callbackHandler.start();
 
@@ -535,6 +559,7 @@ async function main() {
         const transport = new StdioServerTransport();
         await mcpServer.connect(transport);
     } catch (error) {
+        // We can't use MCP logging here since the server isn't connected yet
         console.error(`Error starting server: ${error}`);
         process.exit(1);
     }
@@ -542,7 +567,8 @@ async function main() {
 
 // Handle clean shutdown
 process.on("SIGINT", async () => {
-    console.error("TwilioAgentPaymentServer shutting down...");
+    // Log shutdown message
+    forwardLogToMcp({ level: 'info', message: "TwilioAgentPaymentServer shutting down..." });
     callbackHandler.stop();
     await mcpServer.close();
     process.exit(0);
@@ -550,6 +576,7 @@ process.on("SIGINT", async () => {
 
 // Start the server
 main().catch(error => {
+    // We can't use MCP logging here since the server isn't connected yet
     console.error(`Fatal error: ${error}`);
     process.exit(1);
 });
