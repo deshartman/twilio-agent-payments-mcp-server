@@ -65,9 +65,7 @@ For local development (when the package is not published to npm), add the follow
         "/PATHTONODE/twilio-agent-payments-mcp-server/build/index.js",
         "your_account_sid_here",
         "your_api_key_here",
-        "your_api_secret_here",
-        "+1234567890",
-        "https://your-callback-url.com/payment-status"
+        "your_api_secret_here"
       ],
       "env": {
         "TOKEN_TYPE": "reusable",
