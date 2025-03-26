@@ -12,7 +12,7 @@ class CallbackHandler extends EventEmitter {
     private port: number;
     private server: any;
 
-    constructor(port: number = 3000) {
+    constructor(port: number = 4000) {
         super();
         this.port = port;
         this.app = express();
