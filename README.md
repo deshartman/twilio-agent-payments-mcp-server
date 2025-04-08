@@ -416,3 +416,43 @@ If you encounter logging-related errors:
 4. **Check Event Listeners**: Ensure that event listeners are properly set up to forward logs from your components to the MCP server.
 
 5. **Fallback Logging**: In development environments, you may want to implement fallback logging to console.error() if MCP logging fails, but be aware this can clutter the output.
+
+
+### Payment Callback Data
+
+
+This is the StatusCallback URL for the Pay API to update the pay Sync map with the data we received.
+ 
+NOTE: Initially, the data received, will be the Connector data and contain the PKxxx value.
+
+{
+      "PaymentConnector": "PGP_MOCK",
+      "DateCreated": "2021-08-10T03:55:53.408Z",
+      "PaymentMethod": "credit-card",
+      "CallSid": "CAzzzzz",
+      "ChargeAmount": "9.99",
+      "AccountSid": "ACxxxxx",
+      "Sid": "PKxxxx"
+    }
+
+1) Extract PaySID (PKXXX) and set at key for map.
+2) Use the received object as map item data.
+
+The next update will be the capture data, replacing the connector data, so use that as the data
+
+  { 
+    "SecurityCode": "xxx",
+    "PaymentCardType": "visa",
+    "Sid": "PKxxxx",
+    "PaymentConfirmationCode": "ch_a9dc6297cd1a4fb095e61b1a9cf2dd1d",
+    "CallSid": "CAxxxxx",
+    "Result": "success",
+    "AccountSid": "AC75xxxxxx",
+    "ProfileId": "",
+    "DateUpdated": "2021-08-10T03:58:27.290Z",
+    "PaymentToken": "",
+    "PaymentMethod": "credit-card",
+    "PaymentCardNumber": "xxxxxxxxxxxx1111",
+    "ExpirationDate": "1225"
+  }
+
