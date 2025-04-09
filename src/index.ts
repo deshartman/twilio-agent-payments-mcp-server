@@ -9,6 +9,14 @@ import { CaptureCardNumberTool } from "./tools/CaptureCardNumberTool.js";
 import { CaptureSecurityCodeTool } from "./tools/CaptureSecurityCodeTool.js";
 import { CaptureExpirationDateTool } from "./tools/CaptureExpirationDateTool.js"; // Import the expiration date tool
 import { CompletePaymentCaptureTool } from "./tools/CompletePaymentCaptureTool.js"; // Import the complete payment tool
+import { PaymentStatusResource } from "./resources/PaymentStatusResource.js"; // Import the resource class
+import { StartCapturePrompt } from "./prompts/StartCapturePrompt.js"; // Import the prompt class
+import { CardNumberPrompt } from "./prompts/CardNumberPrompt.js";
+import { CompletionPrompt } from "./prompts/CompletionPrompt.js";
+import { ErrorPrompt } from "./prompts/ErrorPrompt.js";
+import { ExpirationDatePrompt } from "./prompts/ExpirationDatePrompt.js";
+import { FinishCapturePrompt } from "./prompts/FinishCapturePrompt.js";
+import { SecurityCodePrompt } from "./prompts/SecurityCodePrompt.js";
 import { LOG_EVENT, CALLBACK_EVENT } from './constants/events.js';
 
 
@@ -186,36 +194,110 @@ mcpServer.tool(
     completePaymentCaptureTool.execute
 );
 
-
-// Register resource templates
+/*****************************************
+ *
+ *      Payment Status Resource
+ *
+ *****************************************/
+const paymentStatusResource = new PaymentStatusResource(twilioAgentPaymentServer);
+paymentStatusResource.on(LOG_EVENT, logToMcp);
+// Register resource templates using the instance
 mcpServer.resource(
-    "Payment Status",
+    "PaymentStatus",
     new ResourceTemplate("payment://{callSid}/{paymentSid}/status", { list: undefined }),
     { description: "Get the current status of a payment session" },
-    async (uri, variables, extra) => {
-        const callSid = variables.callSid as string;
-        const paymentSid = variables.paymentSid as string;
+    paymentStatusResource.read
+);
 
-        // Get the latest data from TwilioAgentPaymentServer
-        const sessionStatusCallbackData = twilioAgentPaymentServer.getStatusCallbackData(paymentSid);
+/*****************************************
+ *
+ *      Start Capture Prompt
+ *
+ *****************************************/
+const startCapturePrompt = new StartCapturePrompt();
+// Note: Prompts don't typically emit events like tools/resources, but if needed, add .on() here
+mcpServer.prompt(
+    "StartCapture",
+    "Prompt for starting the payment capture process",
+    startCapturePrompt.execute // Use the bound execute method from the instance
+);
 
-        if (!sessionStatusCallbackData) {
-            // Throw an error if the session is not found, as expected by resource read
-            throw new McpError(ErrorCode.InternalError, `Payment session state not found for SID: ${paymentSid}`);
-        }
+/*****************************************
+ *
+ *      Card Number Prompt
+ *
+ *****************************************/
+const cardNumberPrompt = new CardNumberPrompt();
+// Note: Prompts don't typically emit events like tools/resources, but if needed, add .on() here
+mcpServer.prompt(
+    "CardNumber",
+    "Prompt for capturing the card number",
+    cardNumberPrompt.execute // Use the bound execute method from the instance
+);
 
-        const jsonContent = JSON.stringify(sessionStatusCallbackData, null, 2);
+/*****************************************
+ *
+ *      Security Code Prompt
+ *
+ *****************************************/
+const securityCodePrompt = new SecurityCodePrompt();
+// Note: Prompts don't typically emit events like tools/resources, but if needed, add .on() here
+mcpServer.prompt(
+    "SecurityCode",
+    "Prompt for capturing the security code",
+    securityCodePrompt.execute // Use the bound execute method from the instance
+);
 
-        return {
-            contents: [
-                {
-                    uri: uri.toString(),
-                    text: jsonContent,
-                    mimeType: "application/json"
-                }
-            ]
-        };
-    }
+/*****************************************
+ *
+ *      Expiration Date Prompt
+ *
+ *****************************************/
+const expirationDatePrompt = new ExpirationDatePrompt();
+// Note: Prompts don't typically emit events like tools/resources, but if needed, add .on() here
+mcpServer.prompt(
+    "ExpirationDate",
+    "Prompt for capturing the expiration date",
+    expirationDatePrompt.execute // Use the bound execute method from the instance
+);
+
+/*****************************************
+ *
+ *      Finish Capture Prompt
+ *
+ *****************************************/
+const finishCapturePrompt = new FinishCapturePrompt();
+// Note: Prompts don't typically emit events like tools/resources, but if needed, add .on() here
+mcpServer.prompt(
+    "FinishCapture",
+    "Prompt for finishing the payment capture process",
+    finishCapturePrompt.execute // Use the bound execute method from the instance
+);
+
+/*****************************************
+ *
+ *      Completion Prompt
+ *
+ *****************************************/
+const completionPrompt = new CompletionPrompt();
+// Note: Prompts don't typically emit events like tools/resources, but if needed, add .on() here
+mcpServer.prompt(
+    "Completion",
+    "Prompt for payment capture completion",
+    completionPrompt.execute // Use the bound execute method from the instance
+);
+
+/*****************************************
+ *
+ *      Error Prompt
+ *
+ *****************************************/
+const errorPrompt = new ErrorPrompt();
+// Note: Prompts don't typically emit events like tools/resources, but if needed, add .on() here
+mcpServer.prompt(
+    "Error",
+    "Prompt for handling errors during payment capture",
+    errorPrompt.execute // Use the bound execute method from the instance
 );
 
 

@@ -32,8 +32,6 @@ import {
     CallbackHandlerEventNames
 } from '@deshartman/mcp-status-callback';
 
-// import { paymentStateStore } from "../utils/paymentStateStore.js";
-
 /**
  * Service class for handling Twilio-related agent payment operations.
  * Extends EventEmitter to emit events that can be consumed by the main application
