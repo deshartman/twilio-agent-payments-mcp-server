@@ -1,0 +1,48 @@
+# Source files
+*.ts
+!*.d.ts
+tsconfig.json
+
+# Development files
+.vscode/
+.idea/
+.git/
+.github/
+.gitignore
+.npmrc
+.eslintrc
+.eslintignore
+.prettierrc
+.prettierignore
+
+# Test files
+test/
+tests/
+__tests__/
+*.test.ts
+*.spec.ts
+jest.config.js
+
+# Build process
+.travis.yml
+.gitlab-ci.yml
+.github/
+.circleci/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Misc
+.DS_Store
+*.swp
+*.swo
+.env*
+node_modules/
+coverage/
+.nyc_output/
+MCP-llms-full.txt
+MCP-SDK-README.md

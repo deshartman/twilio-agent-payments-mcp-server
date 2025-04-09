@@ -1,24 +1,47 @@
 {
-    "name": "empty-mcp-server",
-    "version": "0.1.0",
-    "description": "Empty MCP Server with TypeScript SDK",
+    "name": "twilio-agent-payments-mcp-server",
+    "version": "0.2.0",
+    "description": "Twilio agent Assisted Payment MCP Server with TypeScript SDK",
     "main": "build/index.js",
     "type": "module",
+    "types": "build/index.d.ts",
     "bin": {
         "twilio-agent-payments-mcp-server": "./build/index.js"
     },
+    "files": [
+        "build/**/*",
+        "README.md",
+        "LICENSE",
+        "CHANGELOG.md"
+    ],
     "scripts": {
         "build": "tsc && chmod +x build/index.js",
         "start": "node build/index.js",
         "dev": "ts-node src/index.ts",
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "prepublishOnly": "npm run build"
     },
     "keywords": [
+        "twilio",
+        "payments",
         "mcp",
-        "server"
+        "model-context-protocol",
+        "llm",
+        "ai"
     ],
-    "author": "",
+    "author": "Des Hartman",
     "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/deshartman/twilio-agent-payments-mcp-server"
+    },
+    "homepage": "https://github.com/deshartman/twilio-agent-payments-mcp-server#readme",
+    "bugs": {
+        "url": "https://github.com/deshartman/twilio-agent-payments-mcp-server/issues"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
     "dependencies": {
         "@deshartman/mcp-status-callback": "^0.5.1",
         "@modelcontextprotocol/sdk": "^1.7.0",

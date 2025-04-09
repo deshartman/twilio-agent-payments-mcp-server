@@ -1,6 +1,6 @@
 # Twilio Agent Payments MCP Server
 
-An MCP (Model Context Protocol) server that enables handling agent-assisted payments via the Twilio API, with enhanced features for asynchronous callbacks and guided workflow.
+An MCP (Model Context Protocol) server that enables handling agent-assisted payments via the Twilio API, with enhanced features for asynchronous callbacks and guided workflow through contextual prompts.
 
 ## Features
 
@@ -8,11 +8,12 @@ An MCP (Model Context Protocol) server that enables handling agent-assisted paym
 - Capture payment card information (card number, security code, expiration date)
 - Tokenize payment information for PCI compliance
 - Asynchronous callbacks via MCP Resources
-- Guided workflow with MCP Prompts
+- Guided workflow with MCP Prompts for each step of the payment process
 - Support for re-entry of payment information
 - Integrates with MCP clients like Claude Desktop
 - Secure credential handling
 - Uses Twilio API Keys for improved security
+- Event-based logging architecture
 
 ## Installation
 
@@ -36,15 +37,18 @@ The server requires the following parameters:
 - `accountSid`: Your Twilio Account SID (must start with 'AC', will be validated)
 - `apiKey`: Your Twilio API Key (starts with 'SK')
 - `apiSecret`: Your Twilio API Secret
-- `statusCallback`: URL for Twilio to send payment status updates to
 
 ### Environment Variables
 
-The following environment variables are required:
+The following environment variables are used for configuration:
 
 - `TOKEN_TYPE`: Type of token to use for payments (e.g., 'reusable', 'one-time')
 - `CURRENCY`: Currency for payments (e.g., 'USD', 'EUR')
 - `PAYMENT_CONNECTOR`: Payment connector to use with Twilio
+- `NGROK_AUTH_TOKEN`: Your Ngrok authentication token (required for callback handling)
+- `NGROK_CUSTOM_DOMAIN`: Optional custom domain for Ngrok
+
+Note: Twilio credentials (accountSid, apiKey, apiSecret) are provided as command-line arguments, not environment variables.
 
 ### Security Note
 
@@ -70,7 +74,9 @@ For local development (when the package is not published to npm), add the follow
       "env": {
         "TOKEN_TYPE": "reusable",
         "CURRENCY": "USD",
-        "PAYMENT_CONNECTOR": "your_connector_name"
+        "PAYMENT_CONNECTOR": "your_connector_name",
+        "NGROK_AUTH_TOKEN": "your_ngrok_auth_token_here",
+        "NGROK_CUSTOM_DOMAIN": "your_custom_domain_here" // Optional
       }
     }
   }
@@ -93,14 +99,15 @@ Once the package is published to npm, you can use the following configuration:
         "twilio-agent-payments-mcp-server",
         "your_account_sid_here",
         "your_api_key_here",
-        "your_api_secret_here",
-        "+1234567890",
-        "https://your-callback-url.com/payment-status"
+        "your_api_secret_here"
       ],
       "env": {
+        ...process.env,   // Include existing environment variables so child process has access to the path
         "TOKEN_TYPE": "reusable",
         "CURRENCY": "USD",
-        "PAYMENT_CONNECTOR": "your_connector_name"
+        "PAYMENT_CONNECTOR": "your_connector_name",
+        "NGROK_AUTH_TOKEN": "your_ngrok_auth_token_here",
+        "NGROK_CUSTOM_DOMAIN": "your_custom_domain_here" // Optional
       }
     }
   }
@@ -188,33 +195,42 @@ Parameters:
 
 Returns:
 - `paymentSid`: The Twilio Payment SID for the new payment session
-- `prompt`: A markdown-formatted prompt to guide the LLM through the next steps
 
-### updatePaymentField
+### captureCardNumber
 
-Updates a payment field with a specific capture type.
-
-Parameters:
-- `callSid`: The Twilio Call SID for the active call
-- `paymentSid`: The Twilio Payment SID for the payment session
-- `captureType`: The type of capture to perform (e.g., 'payment-card-number', 'security-code', 'expiration-date')
-
-Returns:
-- `success`: Boolean indicating success
-- `prompt`: A markdown-formatted prompt to guide the LLM through the next steps
-
-### resetPaymentField
-
-Resets a payment field for re-entry when a customer makes a mistake.
+Starts the capture of the payment card number.
 
 Parameters:
 - `callSid`: The Twilio Call SID for the active call
 - `paymentSid`: The Twilio Payment SID for the payment session
-- `field`: The field to reset ('cardNumber', 'securityCode', or 'expirationDate')
+- `captureType`: Set to 'payment-card-number'
 
 Returns:
-- `success`: Boolean indicating success
-- `prompt`: A markdown-formatted prompt to guide the LLM through the re-entry process
+- Status of the card number capture operation
+
+### captureSecurityCode
+
+Starts the capture of the card security code.
+
+Parameters:
+- `callSid`: The Twilio Call SID for the active call
+- `paymentSid`: The Twilio Payment SID for the payment session
+- `captureType`: Set to 'security-code'
+
+Returns:
+- Status of the security code capture operation
+
+### captureExpirationDate
+
+Starts the capture of the card expiration date.
+
+Parameters:
+- `callSid`: The Twilio Call SID for the active call
+- `paymentSid`: The Twilio Payment SID for the payment session
+- `captureType`: Set to 'expiration-date'
+
+Returns:
+- Status of the expiration date capture operation
 
 ### completePaymentCapture
 
@@ -225,70 +241,107 @@ Parameters:
 - `paymentSid`: The Twilio Payment SID for the payment session
 
 Returns:
-- `success`: Boolean indicating success
-- `token`: The payment token (if successful)
-- `prompt`: A markdown-formatted prompt to guide the LLM through completion
-
-### getPaymentStatus
-
-Gets the current status of a payment session.
-
-Parameters:
-- `callSid`: The Twilio Call SID for the active call
-- `paymentSid`: The Twilio Payment SID for the payment session
-
-Returns:
-- Detailed status information about the payment session
-- Current state of all payment fields
-- `prompt`: A markdown-formatted prompt to guide the LLM based on the current state
+- Status of the payment completion operation
 
 ## Available Resources
 
 ### payment://{callSid}/{paymentSid}/status
 
-Get the current status of a payment session as a JSON object.
+Get the current status of a payment session as a JSON object. This resource provides detailed information about the current state of the payment capture process, including:
 
-### payment://{callSid}/{paymentSid}/prompt
+- Payment SID
+- Payment card number (masked)
+- Payment card type
+- Security code status
+- Expiration date
+- Payment confirmation code
+- Payment result
+- Payment token
 
-Get a markdown-formatted prompt for the current payment state to guide the LLM through the next steps.
+## MCP Prompts
+
+The server provides contextual prompts to guide the LLM through each step of the payment flow:
+
+### StartCapture Prompt
+
+Provides guidance on how to initiate the payment capture process, including:
+- Instructions for asking the customer if they're ready to provide payment information
+- Explanation of the secure processing and tokenization
+- Steps to use the startPaymentCapture tool
+
+### CardNumber Prompt
+
+Guides the LLM on how to handle the card number capture process, including:
+- Instructions for explaining to the customer what information is needed
+- Tips for handling customer questions or concerns
+- Steps to use the captureCardNumber tool
+
+### SecurityCode Prompt
+
+Provides guidance on capturing the card security code, including:
+- Instructions for explaining what the security code is
+- Tips for handling customer questions or concerns
+- Steps to use the captureSecurityCode tool
+
+### ExpirationDate Prompt
+
+Guides the LLM on capturing the card expiration date, including:
+- Instructions for explaining the format needed (MM/YY)
+- Tips for handling customer questions or concerns
+- Steps to use the captureExpirationDate tool
+
+### FinishCapture Prompt
+
+Provides guidance on completing the payment capture process, including:
+- Instructions for confirming all information has been collected
+- Steps to use the completePaymentCapture tool
+
+### Completion Prompt
+
+Guides the LLM on what to do after the payment has been successfully processed, including:
+- Instructions for confirming the payment was successful
+- Suggestions for next steps in the conversation
+
+### Error Prompt
+
+Provides guidance on handling errors during the payment capture process, including:
+- Instructions for explaining the error to the customer
+- Suggestions for troubleshooting common issues
+- Steps to retry the payment capture process
 
 ## Architecture
 
 This MCP server implements an enhanced architecture for handling payment flows:
 
-### State Management
+### Event-Based Architecture
 
-The server maintains an in-memory state store for payment sessions, tracking:
-- Session status ('initialized', 'in-progress', 'complete', 'error')
-- Card number state (masked value, completion status, re-entry needs)
-- Security code state
-- Expiration date state
-- Payment token (when complete)
+The server uses an event-based architecture with EventEmitter for communication between components:
+- Each tool, resource, and server component extends EventEmitter
+- Components emit events for logging and callbacks
+- Event listeners forward logs to the MCP server's logging system
 
 ### Callback Handling
 
-An Express server handles asynchronous callbacks from Twilio:
-- Listens on the configured port (default: 3000)
+The server uses the @deshartman/mcp-status-callback package to handle asynchronous callbacks from Twilio:
+- Creates a secure tunnel using Ngrok for receiving callbacks
 - Processes callbacks for different payment stages
 - Updates the state store based on callback data
 - Handles error conditions and re-entry scenarios
 
-### MCP Resources
+### State Management
 
-Dynamic resources provide access to payment state:
-- `payment://{callSid}/{paymentSid}/status`: Current payment status as JSON
-- `payment://{callSid}/{paymentSid}/prompt`: Contextual prompt for the current state
+Payment state is managed through a Map-based store:
+- The statusCallbackMap stores payment session data indexed by payment SID
+- Each callback updates the state with the latest information
+- The PaymentStatusResource provides access to this state data
 
-### MCP Prompts
+### MCP Integration
 
-Contextual prompts guide the LLM through the payment flow:
-- Start capture prompt
-- Card number capture prompt
-- Security code capture prompt
-- Expiration date capture prompt
-- Completion prompt
-- Error handling prompts
-- Re-entry prompts for correction scenarios
+The server integrates with the MCP protocol through:
+- Tools: Defined with Zod schemas for input validation
+- Resources: Providing access to payment state data
+- Prompts: Contextual guidance for each step of the payment flow
+- Logging: Event-based logging forwarded to the MCP server
 
 ## Development
 
@@ -301,9 +354,10 @@ npm run build
 
 ### Prerequisites
 
-- Node.js 14+
+- Node.js 18+
 - Express (for callback handling)
 - Twilio SDK
+- Ngrok account with auth token
 
 ### Running the Server Manually
 
@@ -311,10 +365,10 @@ To start the server manually for testing (outside of Claude Desktop):
 
 ```bash
 # Run with actual credentials
-node build/index.js "your_account_sid_here" "your_api_key_here" "your_api_secret" "+1234567890" "https://your-callback-url.com/payment-status"
+node build/index.js "your_account_sid_here" "your_api_key_here" "your_api_secret"
 
 # Or use the npm script (which uses ts-node for development)
-npm run dev -- "your_account_sid_here" "your_api_key_here" "your_api_secret" "+1234567890" "https://your-callback-url.com/payment-status"
+npm run dev -- "your_account_sid_here" "your_api_key_here" "your_api_secret"
 ```
 
 The server will start and wait for MCP client connections.
@@ -331,56 +385,33 @@ MIT
 
 ## MCP Inspector Compatibility
 
-When using this server with the MCP Inspector, note that all logging is done via `console.error()` instead of `console.log()`. This is intentional and necessary for compatibility with the MCP protocol, which uses stdout for JSON communication.
+When using this server with the MCP Inspector, note that all logging is done via the MCP logging capability instead of `console.log()`. This is intentional and necessary for compatibility with the MCP protocol, which uses stdout for JSON communication.
 
 If you're extending this server or debugging issues:
 
-1. Use `console.error()` for all logging to ensure logs go to stderr
+1. Use the event-based logging system by emitting LOG_EVENT events
 2. Avoid using `console.log()` as it will interfere with the MCP protocol's JSON messages on stdout
-3. Keep logging minimal to avoid cluttering the terminal output
+3. For debugging outside the MCP context, you can use `console.error()` which outputs to stderr
 
-This approach ensures that the MCP Inspector can properly parse the JSON messages exchanged between the server and client without interference from log messages.
-
-## MCP Server Logging
-
-### Logging Configuration
-
-The Twilio Agent Payments MCP server implements logging capabilities according to the [MCP specification](https://spec.modelcontextprotocol.io/specification/2024-11-05/server/utilities/logging/#capabilities). Logging must be explicitly configured when initializing the MCP server:
-
-```javascript
-const mcpServer = new McpServer(SERVER_CONFIG, {
-    capabilities: {
-        logging: {}
-    }
-});
-```
-
-This configuration is critical - without it, any attempts to use logging functionality will result in runtime errors with messages like:
-
-```
-Error: Server does not support logging (required for notifications/message)
-```
-
-### Event-Based Logging Architecture
+## Event-Based Logging Architecture
 
 The server uses an event-based logging architecture:
 
-1. **Event Emitters**: Both the `CallbackHandler` and `TwilioAgentPaymentServer` classes extend Node.js's `EventEmitter` and emit 'log' events with level and message data.
+1. **Event Emitters**: All tool and resource classes extend Node.js's `EventEmitter` and emit 'log' events with level and message data.
 
 2. **Log Forwarding**: These events are captured by event listeners and forwarded to the MCP server's logging system:
 
    ```javascript
-   // Set up event listeners for callback handler logs
-   callbackHandler.on('log', forwardLogToMcp);
-
-   // Set up event listeners for Twilio agent payment server logs
-   twilioAgentPaymentServer.on('log', forwardLogToMcp);
+   // Set up event listeners for tool logs
+   startPaymentCaptureTool.on(LOG_EVENT, logToMcp);
+   captureCardNumberTool.on(LOG_EVENT, logToMcp);
+   // ... other tools
    ```
 
-3. **MCP Integration**: The `forwardLogToMcp` function transforms these events into MCP-compatible log messages:
+3. **MCP Integration**: The `logToMcp` function transforms these events into MCP-compatible log messages:
 
    ```javascript
-   const forwardLogToMcp = (data: { level: string, message: string }) => {
+   const logToMcp = (data: { level: string, message: string }) => {
        // Only use valid log levels: info, error, debug
        // If level is 'warn', treat it as 'info'
        const mcpLevel = data.level === 'warn' ? 'info' : data.level as "info" | "error" | "debug";
@@ -402,57 +433,46 @@ The server supports the following log levels:
 - `debug`: Detailed debugging information
 - `warn`: Warning messages (automatically converted to 'info' for MCP compatibility)
 
-### Troubleshooting Logging Issues
+## Payment Callback Data Structure
 
-If you encounter logging-related errors:
+The server processes two main types of callback data from Twilio:
 
-1. **Check MCP Server Configuration**: Ensure the server is initialized with the correct logging capability as shown above.
+### Initial Connector Data
 
-2. **Verify MCP SDK Version**: Make sure you're using a compatible version of the MCP SDK that supports the logging capability structure.
+When a payment session is first created, Twilio sends connector data:
 
-3. **Inspect Error Messages**: Look for specific error messages that might indicate configuration issues:
-   - `Server does not support logging (required for notifications/message)`: This indicates the logging capability is not properly configured.
-
-4. **Check Event Listeners**: Ensure that event listeners are properly set up to forward logs from your components to the MCP server.
-
-5. **Fallback Logging**: In development environments, you may want to implement fallback logging to console.error() if MCP logging fails, but be aware this can clutter the output.
-
-
-### Payment Callback Data
-
-
-This is the StatusCallback URL for the Pay API to update the pay Sync map with the data we received.
- 
-NOTE: Initially, the data received, will be the Connector data and contain the PKxxx value.
-
+```json
 {
-      "PaymentConnector": "PGP_MOCK",
-      "DateCreated": "2021-08-10T03:55:53.408Z",
-      "PaymentMethod": "credit-card",
-      "CallSid": "CAzzzzz",
-      "ChargeAmount": "9.99",
-      "AccountSid": "ACxxxxx",
-      "Sid": "PKxxxx"
-    }
+  "PaymentConnector": "PGP_MOCK",
+  "DateCreated": "2021-08-10T03:55:53.408Z",
+  "PaymentMethod": "credit-card",
+  "CallSid": "CAzzzzz",
+  "ChargeAmount": "9.99",
+  "AccountSid": "ACxxxxx",
+  "Sid": "PKxxxx"
+}
+```
 
-1) Extract PaySID (PKXXX) and set at key for map.
-2) Use the received object as map item data.
+### Capture Data
 
-The next update will be the capture data, replacing the connector data, so use that as the data
+As payment information is captured, Twilio sends updated data:
 
-  { 
-    "SecurityCode": "xxx",
-    "PaymentCardType": "visa",
-    "Sid": "PKxxxx",
-    "PaymentConfirmationCode": "ch_a9dc6297cd1a4fb095e61b1a9cf2dd1d",
-    "CallSid": "CAxxxxx",
-    "Result": "success",
-    "AccountSid": "AC75xxxxxx",
-    "ProfileId": "",
-    "DateUpdated": "2021-08-10T03:58:27.290Z",
-    "PaymentToken": "",
-    "PaymentMethod": "credit-card",
-    "PaymentCardNumber": "xxxxxxxxxxxx1111",
-    "ExpirationDate": "1225"
-  }
+```json
+{ 
+  "SecurityCode": "xxx",
+  "PaymentCardType": "visa",
+  "Sid": "PKxxxx",
+  "PaymentConfirmationCode": "ch_a9dc6297cd1a4fb095e61b1a9cf2dd1d",
+  "CallSid": "CAxxxxx",
+  "Result": "success",
+  "AccountSid": "AC75xxxxxx",
+  "ProfileId": "",
+  "DateUpdated": "2021-08-10T03:58:27.290Z",
+  "PaymentToken": "",
+  "PaymentMethod": "credit-card",
+  "PaymentCardNumber": "xxxxxxxxxxxx1111",
+  "ExpirationDate": "1225"
+}
+```
 
+The server stores this data in the statusCallbackMap, indexed by the payment SID, and makes it available through the PaymentStatusResource.
