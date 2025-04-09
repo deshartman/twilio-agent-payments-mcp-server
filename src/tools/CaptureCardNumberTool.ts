@@ -2,6 +2,7 @@ import { EventEmitter } from 'events'; // Import EventEmitter
 import { z } from 'zod'; // Import Zod
 import { TwilioAgentPaymentServer } from "../api-servers/TwilioAgentPaymentServer.js";
 import { PaymentInstance } from "twilio/lib/rest/api/v2010/account/call/payment.js";
+import { LOG_EVENT } from '../constants/events.js';
 
 // Define the input schema internally using Zod
 const captureCardNumberSchema = z.object({
@@ -50,7 +51,7 @@ class CaptureCardNumberTool extends EventEmitter {
             );
 
             if (!paymentInstance) {
-                this.emit('log', { level: 'error', message: `Failed to start capture of card number for PaymentSid: ${paymentSid}` }); // Emit log event
+                this.emit(LOG_EVENT, { level: 'error', message: `Failed to start capture of card number for PaymentSid: ${paymentSid}` }); // Emit log event
                 return {
                     content: [
                         {
@@ -63,7 +64,7 @@ class CaptureCardNumberTool extends EventEmitter {
             }
 
             // Return success
-            this.emit('log', { level: 'info', message: `Started capture of card number for PaymentSid: ${paymentSid}` }); // Emit log event
+            this.emit(LOG_EVENT, { level: 'info', message: `Started capture of card number for PaymentSid: ${paymentSid}` }); // Emit log event
             return {
                 content: [
                     {
@@ -77,7 +78,7 @@ class CaptureCardNumberTool extends EventEmitter {
         } catch (error: any) {
             // Log the error
             const errorMessage = error instanceof Error ? error.message : String(error);
-            this.emit('log', { level: 'error', message: `Error updating payment field for card number: ${errorMessage}` }); // Emit log event
+            this.emit(LOG_EVENT, { level: 'error', message: `Error updating payment field for card number: ${errorMessage}` }); // Emit log event
             return {
                 content: [
                     {

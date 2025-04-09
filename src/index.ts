@@ -9,6 +9,7 @@ import { CaptureCardNumberTool } from "./tools/CaptureCardNumberTool.js";
 import { CaptureSecurityCodeTool } from "./tools/CaptureSecurityCodeTool.js";
 import { CaptureExpirationDateTool } from "./tools/CaptureExpirationDateTool.js"; // Import the expiration date tool
 import { CompletePaymentCaptureTool } from "./tools/CompletePaymentCaptureTool.js"; // Import the complete payment tool
+import { LOG_EVENT, CALLBACK_EVENT } from './constants/events.js';
 
 
 // Get configuration parameters from the command line arguments
@@ -60,7 +61,7 @@ const logToMcp = (data: { level: string, message: string }) => {
 const twilioAgentPaymentServer = new TwilioAgentPaymentServer(accountSid, apiKey, apiSecret);
 
 // Set up event listeners for Twilio agent payment server logs *after* initialization
-twilioAgentPaymentServer.on('log', logToMcp);
+twilioAgentPaymentServer.on(LOG_EVENT, logToMcp);
 
 // TODO: Set up a callback handler event listener for the Twilio agent payment server
 
@@ -121,7 +122,7 @@ const getPaymentStatusSchema = z.object({
  * 
  *****************************************/
 const startPaymentCaptureTool = new StartPaymentCaptureTool(twilioAgentPaymentServer);
-startPaymentCaptureTool.on('log', logToMcp);
+startPaymentCaptureTool.on(LOG_EVENT, logToMcp);
 mcpServer.tool(
     "startPaymentCapture", // Use string literal for name
     "Start a new payment capture session", // Use string literal for description
@@ -135,7 +136,7 @@ mcpServer.tool(
  *
  *****************************************/
 const captureCardNumberTool = new CaptureCardNumberTool(twilioAgentPaymentServer);
-captureCardNumberTool.on('log', logToMcp);
+captureCardNumberTool.on(LOG_EVENT, logToMcp);
 mcpServer.tool(
     "captureCardNumber", // Use string literal for name
     "Start capture of the payment session card number", // Use string literal for description
@@ -149,7 +150,7 @@ mcpServer.tool(
  *
  *****************************************/
 const captureSecurityCodeTool = new CaptureSecurityCodeTool(twilioAgentPaymentServer);
-captureSecurityCodeTool.on('log', logToMcp);
+captureSecurityCodeTool.on(LOG_EVENT, logToMcp);
 mcpServer.tool(
     "captureSecurityCode",
     "Start capture of the payment session security code",
@@ -163,7 +164,7 @@ mcpServer.tool(
  *
  *****************************************/
 const captureExpirationDateTool = new CaptureExpirationDateTool(twilioAgentPaymentServer);
-captureExpirationDateTool.on('log', logToMcp);
+captureExpirationDateTool.on(LOG_EVENT, logToMcp);
 mcpServer.tool(
     "captureExpirationDate",
     "Start capture of the payment session expiration date",
@@ -177,7 +178,7 @@ mcpServer.tool(
  *
  *****************************************/
 const completePaymentCaptureTool = new CompletePaymentCaptureTool(twilioAgentPaymentServer);
-completePaymentCaptureTool.on('log', logToMcp);
+completePaymentCaptureTool.on(LOG_EVENT, logToMcp);
 mcpServer.tool(
     "completePaymentCapture",
     "Complete the payment capture process",

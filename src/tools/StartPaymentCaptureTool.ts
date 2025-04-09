@@ -2,6 +2,7 @@ import { EventEmitter } from 'events'; // Import EventEmitter
 import { z } from 'zod'; // Import Zod
 import { TwilioAgentPaymentServer } from "../api-servers/TwilioAgentPaymentServer.js";
 import { PaymentInstance } from "twilio/lib/rest/api/v2010/account/call/payment.js";
+import { LOG_EVENT } from '../constants/events.js';
 
 // Define the input schema internally using Zod
 const startPaymentCaptureSchema = z.object({
@@ -44,7 +45,7 @@ class StartPaymentCaptureTool extends EventEmitter {
             const paymentInstance: PaymentInstance | null = await this.twilioAgentPaymentServer.startCapture(callSid);
 
             if (!paymentInstance) {
-                this.emit('log', { level: 'error', message: `Failed to start payment capture session for CallSid: ${callSid}` }); // Emit log event
+                this.emit(LOG_EVENT, { level: 'error', message: `Failed to start payment capture session for CallSid: ${callSid}` }); // Emit log event
                 return {
                     content: [
                         {
@@ -57,7 +58,7 @@ class StartPaymentCaptureTool extends EventEmitter {
             }
 
             // Return the payment SID and prompt
-            this.emit('log', { level: 'info', message: `Started payment capture session ${paymentInstance.sid} for CallSid: ${callSid}` }); // Emit log event
+            this.emit(LOG_EVENT, { level: 'info', message: `Started payment capture session ${paymentInstance.sid} for CallSid: ${callSid}` }); // Emit log event
             return {
                 content: [
                     {
@@ -71,7 +72,7 @@ class StartPaymentCaptureTool extends EventEmitter {
         } catch (error: any) {
             // Log the error
             const errorMessage = error instanceof Error ? error.message : String(error);
-            this.emit('log', { level: 'error', message: `Error starting payment capture: ${errorMessage}` }); // Emit log event
+            this.emit(LOG_EVENT, { level: 'error', message: `Error starting payment capture: ${errorMessage}` }); // Emit log event
             return {
                 content: [
                     {

@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { z } from 'zod';
 import { TwilioAgentPaymentServer } from "../api-servers/TwilioAgentPaymentServer.js";
 import { PaymentInstance } from "twilio/lib/rest/api/v2010/account/call/payment.js";
+import { LOG_EVENT } from '../constants/events.js';
 
 // Define the input schema internally using Zod
 const completePaymentCaptureSchema = z.object({
@@ -37,7 +38,7 @@ class CompletePaymentCaptureTool extends EventEmitter {
             const paymentInstance: PaymentInstance | null = await this.twilioAgentPaymentServer.finishCapture(callSid, paymentSid);
 
             if (!paymentInstance) {
-                this.emit('log', { level: 'error', message: `Failed to complete payment capture for PaymentSid: ${paymentSid}` });
+                this.emit(LOG_EVENT, { level: 'error', message: `Failed to complete payment capture for PaymentSid: ${paymentSid}` });
                 return {
                     content: [{ type: "text", text: "Failed to complete payment capture." }],
                     isError: true
@@ -46,7 +47,7 @@ class CompletePaymentCaptureTool extends EventEmitter {
 
             // Return the completion prompt with the token
             const paymentToken = (paymentInstance as any).paymentToken; // TODO: Address potential type issue
-            this.emit('log', { level: 'info', message: `Completed payment capture for PaymentSid: ${paymentSid}` });
+            this.emit(LOG_EVENT, { level: 'info', message: `Completed payment capture for PaymentSid: ${paymentSid}` });
             return {
                 content: [{
                     type: "text",
@@ -58,7 +59,7 @@ class CompletePaymentCaptureTool extends EventEmitter {
             };
         } catch (error: any) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            this.emit('log', { level: 'error', message: `Error completing payment capture: ${errorMessage}` });
+            this.emit(LOG_EVENT, { level: 'error', message: `Error completing payment capture: ${errorMessage}` });
             return {
                 content: [{ type: "text", text: `Error completing payment capture: ${errorMessage}` }],
                 isError: true

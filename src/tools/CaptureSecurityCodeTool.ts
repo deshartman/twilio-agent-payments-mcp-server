@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { z } from 'zod';
 import { TwilioAgentPaymentServer } from "../api-servers/TwilioAgentPaymentServer.js";
 import { PaymentInstance } from "twilio/lib/rest/api/v2010/account/call/payment.js";
+import { LOG_EVENT } from '../constants/events.js';
 
 // Define the input schema internally using Zod
 const captureSecurityCodeSchema = z.object({
@@ -42,20 +43,20 @@ class CaptureSecurityCodeTool extends EventEmitter {
             );
 
             if (!paymentSession) {
-                this.emit('log', { level: 'error', message: `Failed to start capture of security code for PaymentSid: ${paymentSid}` });
+                this.emit(LOG_EVENT, { level: 'error', message: `Failed to start capture of security code for PaymentSid: ${paymentSid}` });
                 return {
                     content: [{ type: "text", text: `Failed to start capture of security code` }],
                     isError: true
                 };
             }
 
-            this.emit('log', { level: 'info', message: `Started capture of security code for PaymentSid: ${paymentSid}` });
+            this.emit(LOG_EVENT, { level: 'info', message: `Started capture of security code for PaymentSid: ${paymentSid}` });
             return {
                 content: [{ type: "text", text: JSON.stringify({ success: true }, null, 2) }]
             };
         } catch (error: any) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            this.emit('log', { level: 'error', message: `Error updating payment field for security code: ${errorMessage}` });
+            this.emit(LOG_EVENT, { level: 'error', message: `Error updating payment field for security code: ${errorMessage}` });
             return {
                 content: [{ type: "text", text: `Error updating payment field: ${errorMessage}` }],
                 isError: true

@@ -6,6 +6,7 @@ import pkg from 'twilio';
 const { Twilio } = pkg;
 import { EventEmitter } from 'events';
 import { PaymentCapture, PaymentInstance, PaymentTokenType } from "twilio/lib/rest/api/v2010/account/call/payment.js";
+import { LOG_EVENT, CALLBACK_EVENT } from '../constants/events.js';
 
 /**
  * Interface for the Twilio Payment Token
@@ -20,12 +21,15 @@ export interface PaymentToken {
     paymentSid?: string;  // The payment SID this token is associated with
     callSid?: string;     // The call SID this token is associated with
 }
+
 import {
     CallbackHandler,
     CallbackHandlerOptions,
     LogEventData,
     CallbackEventData,
-    TunnelStatusEventData
+    TunnelStatusEventData,
+    CallbackHandlerEvents,
+    CallbackHandlerEventNames
 } from '@deshartman/mcp-status-callback';
 
 // import { paymentStateStore } from "../utils/paymentStateStore.js";
@@ -63,7 +67,7 @@ class TwilioAgentPaymentServer extends EventEmitter {
     twilioClient: any; // Using 'any' type for the Twilio client since we don't have proper type definitions
     statusCallback: string;
     // A callback Map to hold the status callback data. The key is they payment SID and the data is JSON of any type
-    statusCallbackData: Map<string, any>;
+    statusCallbackMap: Map<string, any>;
 
     tokenType: PaymentTokenType; // Always tokenise the card
     currency: string;
@@ -83,7 +87,7 @@ class TwilioAgentPaymentServer extends EventEmitter {
         this.paymentConnector = process.env.PAYMENT_CONNECTOR as string;
 
         this.twilioClient = new Twilio(apiKey, apiSecret, { accountSid: accountSid });
-        this.statusCallbackData = new Map();
+        this.statusCallbackMap = new Map();
 
         // Get environment variables for Ngrok configuration
         const ngrokAuthToken = process.env.NGROK_AUTH_TOKEN;
@@ -103,35 +107,35 @@ class TwilioAgentPaymentServer extends EventEmitter {
         const callbackHandler = new CallbackHandler(options);
 
         // Set up event listeners with proper typing
-        callbackHandler.on('log', (data: LogEventData) => {
-            const { level, message } = data;
+        callbackHandler.on(CallbackHandlerEventNames.LOG, (logData: LogEventData) => {
+            const { level, message } = logData;
             console.log(`[${level.toUpperCase()}] ${message}`);
         });
 
         // Handle callbacks with type casting for our specific payload
-        callbackHandler.on('callback', (data: CallbackEventData) => {
+        callbackHandler.on(CallbackHandlerEventNames.CALLBACK, (callbackData: CallbackEventData) => {
 
             // TODO: Handle the callback data here
-            const queryParameters = data.queryParameters;
-            const body: PaymentInstance = data.body;
+            const queryParameters = callbackData.queryParameters;
+            const body: PaymentInstance = callbackData.body;
 
             const callSid = body.callSid;
             const paymentSid = body.sid;
 
             // Store the result in the callbackData map
-            this.statusCallbackData.set(paymentSid, body);
+            this.statusCallbackMap.set(paymentSid, body);
 
             // Now let the MCP server know
-            this.emit('callback', { queryParameters, body });
+            this.emit(CALLBACK_EVENT, { queryParameters, body });
 
         });
     }
 
     /*********************************************************************************************************************************************
-        * 
-        *       Agent assisted PAYMENTS
-        * 
-        *********************************************************************************************************************************************/
+    * 
+    *       Agent assisted PAYMENTS
+    * 
+    *********************************************************************************************************************************************/
 
     /**
      * This starts the capture process based on the Call SID. This will create a payment session and return the session object.
@@ -160,13 +164,13 @@ class TwilioAgentPaymentServer extends EventEmitter {
                 .create(sessionData);
 
             // store the data in the callbackData map, using the Sid as the key
-            this.statusCallbackData.set(paymentSession.sid, paymentSession);
+            this.statusCallbackMap.set(paymentSession.sid, paymentSession);
 
             // Return the Payment session Sid for this Call Sid
             return paymentSession;
         } catch (error) {
             const message = `Error with StartCapture for callSID: ${callSid} - ${error} `;
-            this.emit('log', { level: 'error', message });
+            this.emit(LOG_EVENT, { level: 'error', message });
             return null;
         }
     }
@@ -184,7 +188,7 @@ class TwilioAgentPaymentServer extends EventEmitter {
 
         if (callResource.status !== 'in-progress') {
             const message = `startCapture error: Call not in progress for ${callSid}`;
-            this.emit('log', { level: 'error', message });
+            this.emit(LOG_EVENT, { level: 'error', message });
             return null;
         }
 
@@ -199,12 +203,12 @@ class TwilioAgentPaymentServer extends EventEmitter {
                 });
 
             // Store the new data in the callbackData map, using the Sid as the key
-            this.statusCallbackData.set(paymentSession.sid, paymentSession);
+            this.statusCallbackMap.set(paymentSession.sid, paymentSession);
 
             return paymentSession; // Pay Object
         } catch (error) {
             const message = `Error with captureCard for callSID: ${callSid} - ${error} `;
-            this.emit('log', { level: 'error', message });
+            this.emit(LOG_EVENT, { level: 'error', message });
             return null;
         }
 
@@ -228,12 +232,12 @@ class TwilioAgentPaymentServer extends EventEmitter {
                 });
 
             // Store the new data in the callbackData map, using the Sid as the key
-            this.statusCallbackData.set(paymentSession.sid, paymentSession);
+            this.statusCallbackMap.set(paymentSession.sid, paymentSession);
 
             return paymentSession;
         } catch (error) {
             const message = `Error with finishCapture for callSID: ${callSid} - ${error} `;
-            this.emit('log', { level: 'error', message });
+            this.emit(LOG_EVENT, { level: 'error', message });
             return null;
         }
     }
@@ -250,7 +254,7 @@ class TwilioAgentPaymentServer extends EventEmitter {
      */
     getStatusCallbackData(paymentSid: string) {
         // Check if the paymentSid exists in the map
-        if (this.statusCallbackData.has(paymentSid)) {
+        if (this.statusCallbackMap.has(paymentSid)) {
             // Based on this data we now need to work out what state we are in? Are we still collecting card, security or exp. date? This is the specific Twilio knowledge
             // TODO: This needs to be simplified for the MCP server
             /*
@@ -283,7 +287,7 @@ class TwilioAgentPaymentServer extends EventEmitter {
 
 
             // Return the data associated with the paymentSid. Note this needs to be simplified for the MCP server
-            const paymentData = this.statusCallbackData.get(paymentSid);
+            const paymentData = this.statusCallbackMap.get(paymentSid);
             const simplifiedData = {
                 paymentSid: paymentSid,
                 paymentCardNumber: paymentData.PaymentCardNumber,
