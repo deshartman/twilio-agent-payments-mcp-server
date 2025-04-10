@@ -193,6 +193,21 @@ Initiates a payment capture process for an active call.
 Parameters:
 - `callSid`: The Twilio Call SID for the active call
 
+NOTE: When handling Twilio calls, you need to understand which call leg Call SID you are working with. Twilio Payments need to be
+attached to the PSTN side call leg. If applied to the Twilio Client side, the DTMF digits will not be captured. As such this MCP Server
+assumes the correct call leg is being used. Typically it is checked as below:
+
+```javascript
+ // Pseudo code: direction of the call
+  if (event.CallDirection === "toPSTN") {
+    theCallSid = event.CallSid;
+  }
+
+  if (event.CallDirection == "toSIP") {
+    theCallSid = event.ParentCallSid;
+  }
+```
+
 Returns:
 - `paymentSid`: The Twilio Payment SID for the new payment session
 
@@ -452,6 +467,8 @@ When a payment session is first created, Twilio sends connector data:
   "Sid": "PKxxxx"
 }
 ```
+
+
 
 ### Capture Data
 

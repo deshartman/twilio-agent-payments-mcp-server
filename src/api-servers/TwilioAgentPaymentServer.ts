@@ -50,7 +50,19 @@ import {
  * - Emitting log events for different actions
  * - Managing the payment session state
  * 
- * The architectural 
+ * NOTE: When handling Twilio calls, you need to understand which call leg Call SID you are working with. Twilio Payments need to be
+ * attached to the PSTN side call leg. If applied to the Twilio Client side, the DTMF digits will not be captured. As such this class
+ * assumes the correct call leg is being used. Typically it is checked as below:
+ * 
+ *  // Direction of the call
+ * let PSTNSideCallSid
+ *   if (event.CallDirection === "toPSTN") {
+ *     PSTNSideCallSid = event.CallSid;
+ *   }
+ * 
+ *   if (event.CallDirection == "toSIP") {// toSIP
+ *     PSTNSideCallSid = event.ParentCallSid;
+ *   }
  * 
  * @class
  * @property {string} accountSid - Twilio account SID
@@ -63,7 +75,8 @@ class TwilioAgentPaymentServer extends EventEmitter {
     apiKey: string;
     apiSecret: string;
     twilioClient: any; // Using 'any' type for the Twilio client since we don't have proper type definitions
-    statusCallback: string;
+    private callbackHandler: CallbackHandler | null = null;
+    private statusCallbackUrl: string | null = null; // The URL to send the status callback to
     // A callback Map to hold the status callback data. The key is they payment SID and the data is JSON of any type
     statusCallbackMap: Map<string, any>;
 
@@ -71,62 +84,92 @@ class TwilioAgentPaymentServer extends EventEmitter {
     currency: string;
     paymentConnector: string;
 
-
-
     constructor(accountSid: string, apiKey: string, apiSecret: string) {
         super();
         this.accountSid = accountSid;
         this.apiKey = apiKey;
         this.apiSecret = apiSecret;
-        this.statusCallback = "";
-
-        this.tokenType = process.env.TOKEN_TYPE as PaymentTokenType; // Always tokenise the card
+        this.tokenType = process.env.TOKEN_TYPE as PaymentTokenType;
         this.currency = process.env.CURRENCY as string;
         this.paymentConnector = process.env.PAYMENT_CONNECTOR as string;
 
+        // Initialize the Twilio client with the provided credentials
         this.twilioClient = new Twilio(apiKey, apiSecret, { accountSid: accountSid });
-        this.statusCallbackMap = new Map();
 
-        // Get environment variables for Ngrok configuration
+        // Keep a map of all the status callback data
+        this.statusCallbackMap = new Map<string, any>();
+        //this.statusCallbackMap = new Map();
+
+        /*********************************************** *
+         * 
+         *       MCP Status Callback
+         * 
+         * *********************************************** */
+        // Initialize the status callback handler using environment variables
         const ngrokAuthToken = process.env.NGROK_AUTH_TOKEN;
         const customDomain = process.env.NGROK_CUSTOM_DOMAIN;
 
         if (!ngrokAuthToken) {
-            console.error('NGROK_AUTH_TOKEN environment variable is required');
+            // Emit the error event and exit the process
+            this.emit(LOG_EVENT, { level: 'error', message: 'NGROK_AUTH_TOKEN environment variable not provided. Callback server will not be started.' });
             process.exit(1);
         }
 
-        // Create a new instance with typed options
         const options: CallbackHandlerOptions = {
-            ngrokAuthToken: ngrokAuthToken, // Replace with your actual Ngrok auth token
-            customDomain: customDomain // Optional custom domain
+            ngrokAuthToken,
+            customDomain
         };
 
-        const callbackHandler = new CallbackHandler(options);
+        this.callbackHandler = new CallbackHandler(options);
 
         // Set up event listeners with proper typing
-        callbackHandler.on(CallbackHandlerEventNames.LOG, (logData: LogEventData) => {
-            const { level, message } = logData;
-            console.log(`[${level.toUpperCase()}] ${message}`);
+        this.callbackHandler.on(CallbackHandlerEventNames.LOG, (logData: LogEventData) => {
+            this.emit(LOG_EVENT, { level: logData.level, message: logData.message });
         });
 
         // Handle callbacks with type casting for our specific payload
-        callbackHandler.on(CallbackHandlerEventNames.CALLBACK, (callbackData: CallbackEventData) => {
+        this.callbackHandler.on(CallbackHandlerEventNames.CALLBACK, (callbackData: CallbackEventData) => {
+            // this.emit(LOG_EVENT, { level: 'info', message: `Constructor Received CALLBACK: ${JSON.stringify(callbackData)}` });
 
-            // TODO: Handle the callback data here
-            const queryParameters = callbackData.queryParameters;
-            const body: PaymentInstance = callbackData.body;
-
-            const callSid = body.callSid;
-            const paymentSid = body.sid;
+            const queryParameters: any = callbackData.queryParameters;
+            const body: any = callbackData.body;
+            const callSid: string = body.CallSid;
+            const paymentSid: string = body.Sid;
 
             // Store the result in the callbackData map
             this.statusCallbackMap.set(paymentSid, body);
 
             // Now let the MCP server know
-            this.emit(CALLBACK_EVENT, { queryParameters, body });
-
+            this.emit(CALLBACK_EVENT, { level: 'info', message: `CALLBACK Body: ${JSON.stringify(body)}` });
         });
+
+        // Start the callback server
+        try {
+            this.startCallbackServer();
+            // this.emit(LOG_EVENT, { level: 'info', message: 'Callback server started successfully.' });
+        } catch (error) {
+            this.emit(LOG_EVENT, { level: 'error', message: `Failed to start MCP status callback server: ${error}` });
+        }
+    }
+
+    /**
+     * Private method to start the callback server
+     * @returns {Promise<void>}
+     */
+    private async startCallbackServer(): Promise<void> {
+        if (!this.callbackHandler) {
+            this.emit(LOG_EVENT, { level: 'error', message: 'Callback handler is not initialized.' });
+            throw new Error('Callback handler not initialized');
+        }
+
+        try {
+            this.statusCallbackUrl = await this.callbackHandler.start();
+            // this.emit(LOG_EVENT, { level: 'info', message: `Callback server started at: ${this.statusCallbackUrl}` });
+        } catch (error) {
+            console.error('Error starting callback server:', error);
+            this.emit(LOG_EVENT, { level: 'error', message: `Error starting callback server: ${error}` });
+            throw error;
+        }
     }
 
     /*********************************************************************************************************************************************
@@ -146,7 +189,7 @@ class TwilioAgentPaymentServer extends EventEmitter {
         // Create the payment session
         const sessionData = {
             idempotencyKey: callSid + Date.now().toString(),
-            statusCallback: this.statusCallback,
+            statusCallback: this.statusCallbackUrl,
             tokenType: this.tokenType,
             currency: this.currency,
             paymentConnector: this.paymentConnector,
@@ -163,6 +206,9 @@ class TwilioAgentPaymentServer extends EventEmitter {
 
             // store the data in the callbackData map, using the Sid as the key
             this.statusCallbackMap.set(paymentSession.sid, paymentSession);
+
+            // Emit a log event for starting the capture
+            this.emit(LOG_EVENT, { level: 'info', message: `Started payment SID: ${paymentSession.sid} this.StatusCallbackMap: ${JSON.stringify(this.statusCallbackMap.get(paymentSession.sid), null, 2)}` });
 
             // Return the Payment session Sid for this Call Sid
             return paymentSession;
@@ -185,10 +231,12 @@ class TwilioAgentPaymentServer extends EventEmitter {
         const callResource = await this.twilioClient.calls(callSid).fetch();
 
         if (callResource.status !== 'in-progress') {
-            const message = `startCapture error: Call not in progress for ${callSid}`;
-            this.emit(LOG_EVENT, { level: 'error', message });
+            this.emit(LOG_EVENT, { level: 'error', message: `Call SID: ${callSid} is not in progress. Cannot update payment session.` });
             return null;
         }
+
+        // Log that updatePaySession is being called and has a this.statusCallbackUrl value of
+        this.emit(LOG_EVENT, { level: 'info', message: `updatePaySession called with callSID: ${callSid} - Payment SID: ${paymentSid} - Capture Type: ${captureType} - this.statusCallbackUrl: ${this.statusCallbackUrl}` });
 
         try {
             const paymentSession = await this.twilioClient
@@ -197,11 +245,11 @@ class TwilioAgentPaymentServer extends EventEmitter {
                 .update({
                     capture: captureType,
                     idempotencyKey: callSid + Date.now().toString(),
-                    statusCallback: this.statusCallback,
+                    statusCallback: this.statusCallbackUrl,
                 });
 
             // Store the new data in the callbackData map, using the Sid as the key
-            this.statusCallbackMap.set(paymentSession.sid, paymentSession);
+            this.statusCallbackMap.set(paymentSid, paymentSession);
 
             return paymentSession; // Pay Object
         } catch (error) {
@@ -226,11 +274,11 @@ class TwilioAgentPaymentServer extends EventEmitter {
                 .update({
                     idempotencyKey: callSid + Date.now().toString(),
                     status: "complete",
-                    statusCallback: `${this.statusCallback}?lastCall=finishCapture`,
+                    statusCallback: `${this.statusCallbackUrl}?lastCall=finishCapture`,
                 });
 
             // Store the new data in the callbackData map, using the Sid as the key
-            this.statusCallbackMap.set(paymentSession.sid, paymentSession);
+            this.statusCallbackMap.set(paymentSid, paymentSession);
 
             return paymentSession;
         } catch (error) {
@@ -239,11 +287,6 @@ class TwilioAgentPaymentServer extends EventEmitter {
             return null;
         }
     }
-
-    /**
-     * Implement a status callback public endpoint to receive the status of the payment
-     */
-
 
     /**
      * Processes a callback based on the last call
@@ -282,23 +325,25 @@ class TwilioAgentPaymentServer extends EventEmitter {
 
             */
 
-
-
             // Return the data associated with the paymentSid. Note this needs to be simplified for the MCP server
             const paymentData = this.statusCallbackMap.get(paymentSid);
+
+            // Emit a log event for the status callback
+            // this.emit(LOG_EVENT, { level: 'debug', message: `getStatusCallbackData: Payment Data: ${JSON.stringify(paymentData)}` });
             const simplifiedData = {
                 paymentSid: paymentSid,
-                paymentCardNumber: paymentData.PaymentCardNumber,
-                paymentCardType: paymentData.PaymentCardType,
-                securityCode: paymentData.SecurityCode,
-                expirationDate: paymentData.ExpirationDate,
-                paymentConfirmationCode: paymentData.PaymentConfirmationCode,
-                result: paymentData.Result,
-                profileId: paymentData.ProfileId,
-                paymentToken: paymentData.PaymentToken,
-                paymentMethod: paymentData.PaymentMethod,
+                paymentCardNumber: paymentData.PaymentCardNumber || "",
+                paymentCardType: paymentData.PaymentCardType || "",
+                securityCode: paymentData.SecurityCode || "",
+                expirationDate: paymentData.ExpirationDate || "",
+                paymentConfirmationCode: paymentData.PaymentConfirmationCode || "",
+                result: paymentData.Result || "",
+                profileId: paymentData.ProfileId || "",
+                paymentToken: paymentData.PaymentToken || "",
+                paymentMethod: paymentData.PaymentMethod || "",
             };
 
+            this.emit(LOG_EVENT, { level: 'info', message: `getStatusCallbackData.Simplified Data: ${JSON.stringify(simplifiedData)}` });
             return simplifiedData;
         } else {
             // If not found, return null
