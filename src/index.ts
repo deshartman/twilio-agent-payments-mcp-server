@@ -70,6 +70,7 @@ const twilioAgentPaymentServer = new TwilioAgentPaymentServer(accountSid, apiKey
 
 // Set up event listeners for Twilio agent payment server logs *after* initialization
 twilioAgentPaymentServer.on(LOG_EVENT, logToMcp);
+twilioAgentPaymentServer.on(CALLBACK_EVENT, logToMcp);
 
 // TODO: Set up a callback handler event listener for the Twilio agent payment server
 
@@ -91,38 +92,6 @@ const MCP_CAPABILITIES = { capabilities: { tools: {}, resources: {}, prompts: {}
 
 const mcpServer = new McpServer(SERVER_CONFIG, MCP_CAPABILITIES);
 
-// Define schemas for tool inputs
-
-
-
-// Define schema for capture credit card number. You will have callSid, PaymentSid and captureType as "payment-card-number"
-
-
-// Define schema for capture security code. You will have callSid, PaymentSid and captureType as "security-code"
-// Define schema for capture expiration date. You will have callSid, PaymentSid and captureType as "expiration-date"
-const captureExpirationDateSchema = z.object({
-    callSid: z.string().describe("The Twilio Call SID"),
-    paymentSid: z.string().describe("The Twilio Payment SID"),
-    captureType: z.literal('expiration-date').describe("The type of payment field to capture")
-});
-
-
-const resetPaymentFieldSchema = z.object({
-    callSid: z.string().describe("The Twilio Call SID"),
-    paymentSid: z.string().describe("The Twilio Payment SID"),
-    field: z.enum(['cardNumber', 'securityCode', 'expirationDate'] as const)
-        .describe("The payment field to reset")
-});
-
-const completePaymentCaptureSchema = z.object({
-    callSid: z.string().describe("The Twilio Call SID"),
-    paymentSid: z.string().describe("The Twilio Payment SID")
-});
-
-const getPaymentStatusSchema = z.object({
-    callSid: z.string().describe("The Twilio Call SID"),
-    paymentSid: z.string().describe("The Twilio Payment SID")
-});
 
 /*****************************************
  * 
