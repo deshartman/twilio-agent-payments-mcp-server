@@ -8,7 +8,6 @@ import { LOG_EVENT } from '../constants/events.js';
 const captureCardNumberSchema = z.object({
     callSid: z.string().describe("The Twilio Call SID"),
     paymentSid: z.string().describe("The Twilio Payment SID"),
-    captureType: z.literal('payment-card-number').describe("The type of payment field to capture")
 });
 
 // Infer the input type from the Zod schema
