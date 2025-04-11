@@ -1,0 +1,69 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - accountSid
+      - apiKey
+      - apiSecret
+      - paymentConnector
+      - ngrokAuthToken
+    properties:
+      accountSid:
+        type: string
+        description: Your Twilio Account SID. Must start with 'AC'.
+      apiKey:
+        type: string
+        description: Your Twilio API Key. Typically starts with 'SK'.
+      apiSecret:
+        type: string
+        description: Your Twilio API Secret.
+      tokenType:
+        type: string
+        default: reusable
+        description: Payment token type, e.g. 'reusable' or 'one-time'.
+      currency:
+        type: string
+        default: USD
+        description: Currency for payments.
+      paymentConnector:
+        type: string
+        description: Payment connector to use with Twilio.
+      ngrokAuthToken:
+        type: string
+        description: Ngrok authentication token for callback handling.
+      ngrokCustomDomain:
+        type: string
+        default: ""
+        description: Optional custom domain for Ngrok.
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |-
+    (config) => ({
+      command: 'node',
+      args: [
+        'build/index.js',
+        config.accountSid,
+        config.apiKey,
+        config.apiSecret
+      ],
+      env: Object.assign({}, process.env, {
+        TOKEN_TYPE: config.tokenType,
+        CURRENCY: config.currency,
+        PAYMENT_CONNECTOR: config.paymentConnector,
+        NGROK_AUTH_TOKEN: config.ngrokAuthToken,
+        NGROK_CUSTOM_DOMAIN: config.ngrokCustomDomain
+      })
+    })
+  exampleConfig:
+    accountSid: ACXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+    apiKey: SKXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+    apiSecret: your_api_secret_here
+    tokenType: reusable
+    currency: USD
+    paymentConnector: twilio_connector
+    ngrokAuthToken: your_ngrok_auth_token_here
+    ngrokCustomDomain: optional.custom.domain
