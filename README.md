@@ -1,5 +1,7 @@
 # Twilio Agent Payments MCP Server
 
+[![smithery badge](https://smithery.ai/badge/@deshartman/twilio-agent-payments-mcp-server)](https://smithery.ai/server/@deshartman/twilio-agent-payments-mcp-server)
+
 An MCP (Model Context Protocol) server that enables handling agent-assisted payments via the Twilio API, with enhanced features for asynchronous callbacks and guided workflow through contextual prompts.
 
 ## Features
@@ -16,6 +18,14 @@ An MCP (Model Context Protocol) server that enables handling agent-assisted paym
 - Event-based logging architecture
 
 ## Installation
+
+### Installing via Smithery
+
+To install Twilio Agent Payments MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@deshartman/twilio-agent-payments-mcp-server):
+
+```bash
+npx -y @smithery/cli install @deshartman/twilio-agent-payments-mcp-server --client claude
+```
 
 You can use this server directly via npx:
 
