@@ -30,6 +30,29 @@ npm install -g twilio-agent-payments-mcp-server
 twilio-agent-payments-mcp-server <accountSid> <apiKey> <apiSecret>
 ```
 
+### Environmental Parameters
+
+When installing the server, you need to provide the following parameters:
+
+1. **Command-line arguments** (required):
+   - `accountSid`: Your Twilio Account SID
+   - `apiKey`: Your Twilio API Key
+   - `apiSecret`: Your Twilio API Secret
+
+2. **Environment variables** (set before running the server):
+   - `TOKEN_TYPE`: Type of token to use for payments (e.g., 'reusable', 'one-time')
+   - `CURRENCY`: Currency for payments (e.g., 'USD', 'EUR')
+   - `PAYMENT_CONNECTOR`: Payment connector to use with Twilio
+   - `NGROK_AUTH_TOKEN`: Your Ngrok authentication token (required for callback handling)
+   - `NGROK_CUSTOM_DOMAIN`: Optional custom domain for Ngrok
+
+Example with environment variables:
+```bash
+TOKEN_TYPE=reusable CURRENCY=USD PAYMENT_CONNECTOR=your_connector NGROK_AUTH_TOKEN=your_token npx twilio-agent-payments-mcp-server <accountSid> <apiKey> <apiSecret>
+```
+
+See the Configuration section below for more details on these parameters.
+
 ## Configuration
 
 The server requires the following parameters:
@@ -193,6 +216,8 @@ Initiates a payment capture process for an active call.
 Parameters:
 - `callSid`: The Twilio Call SID for the active call
 
+IMPORTANT: The StartCapturePrompt.ts requires the user to enter a Call SID from the MCP Client side. This is a required parameter and the prompt will throw an error if it's not provided.
+
 NOTE: When handling Twilio calls, you need to understand which call leg Call SID you are working with. Twilio Payments need to be
 attached to the PSTN side call leg. If applied to the Twilio Client side, the DTMF digits will not be captured. As such this MCP Server
 assumes the correct call leg is being used. Typically it is checked as below:
@@ -283,6 +308,7 @@ Provides guidance on how to initiate the payment capture process, including:
 - Instructions for asking the customer if they're ready to provide payment information
 - Explanation of the secure processing and tokenization
 - Steps to use the startPaymentCapture tool
+- **IMPORTANT**: Requires the user to enter a Call SID from the MCP Client side, which is a mandatory parameter
 
 ### CardNumber Prompt
 
