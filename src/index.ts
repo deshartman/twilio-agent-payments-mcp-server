@@ -188,6 +188,7 @@ const startCapturePrompt = new StartCapturePrompt();
 mcpServer.prompt(
     "StartCapture",
     "Prompt for starting the payment capture process",
+    { callSid: z.string().describe("The Twilio Call SID") },
     startCapturePrompt.execute // Use the bound execute method from the instance
 );
 

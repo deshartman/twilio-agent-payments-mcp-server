@@ -1,11 +1,13 @@
 import { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import { PromptCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
+// Remove the PromptCallback import as we'll define the function signature directly
 
-const START_CAPTURE_PROMPT_TEXT = `
+const getStartCapturePromptText = (callSid: string) => `
     # Payment Card Capture Process
 
     I'll guide you through capturing the customer's payment card information securely.
+    
+    Call SID: ${callSid} (This will be used to generate a payment SID)
 
     ## Next Step: Start Payment Capture
 
@@ -28,15 +30,23 @@ export class StartCapturePrompt {
     /**
      * The execute method provides the content for the 'StartCapture' prompt.
      * It guides the user on how to initiate the payment capture process.
+     * 
+     * @param args - Contains the callSid parameter
+     * @param extra - Contains additional request context
      */
-    public execute: PromptCallback = (extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> => {
+    public execute = (args: { callSid: string }, extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> => {
+        const { callSid } = args;
+
+        if (!callSid) {
+            throw new Error("callSid parameter is required");
+        }
         return {
             messages: [
                 {
                     role: "assistant",
                     content: {
                         type: "text",
-                        text: START_CAPTURE_PROMPT_TEXT,
+                        text: getStartCapturePromptText(callSid),
                     }
                 }
             ]
