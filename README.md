@@ -5,7 +5,7 @@ An MCP (Model Context Protocol) server that enables handling agent-assisted paym
 ## Features
 
 - Process secure payments during voice calls via Twilio
-- Capture payment card information (card number, security code, expiration date)
+- Capture payment information (card number, security code, expiration date)
 - Tokenize payment information for PCI compliance
 - Asynchronous callbacks via MCP Resources
 - Guided workflow with MCP Prompts for each step of the payment process
@@ -206,6 +206,169 @@ The server will guide you through the payment process with contextual prompts at
 ```
 
 The MCP server itself provides all the detailed tool definitions, input schemas, and contextual prompts to guide the LLM through the payment flow.
+
+## Developer Implementation Notes
+
+This section explains how the MCP server implementation is organized across different components and files, focusing on the architecture patterns used.
+
+### Component Organization
+
+The server implementation is split across several directories:
+
+1. **src/index.ts**: The main entry point that:
+   - Initializes the MCP server
+   - Creates instances of all tools, resources, and prompts
+   - Registers these components with the MCP server
+   - Sets up event listeners for logging
+   - Connects the server to the transport layer
+
+2. **src/tools/**: Contains individual tool implementations
+   - Each tool is implemented as a class that extends EventEmitter
+   - Tools handle specific payment operations (e.g., StartPaymentCaptureTool, CaptureCardNumberTool)
+   - Each tool defines its input schema using Zod and implements an execute method
+
+3. **src/prompts/**: Contains prompt implementations
+   - Each prompt is implemented as a class with an execute method
+   - Prompts provide contextual guidance to the LLM for each step of the payment flow
+   - Some prompts accept parameters that can be used to customize the prompt content
+
+4. **src/resources/**: Contains resource implementations
+   - Resources provide access to data (e.g., PaymentStatusResource)
+   - Each resource implements a read method that retrieves and formats data
+
+5. **src/api-servers/**: Contains the implementation of the Twilio API client
+   - Handles communication with the Twilio API
+   - Manages payment session state
+
+### The `.execute` Method Pattern
+
+A key architectural pattern in this codebase is the use of the `.execute` method:
+
+1. **In Tools**: 
+   ```typescript
+   // Example from StartPaymentCaptureTool.ts
+   async execute(params: StartPaymentCaptureInput, extra: any): Promise<ToolResult> {
+     // Implementation that calls Twilio API and returns result
+   }
+   ```
+   - The execute method is bound to the class instance in the constructor: `this.execute = this.execute.bind(this);`
+   - This ensures the method maintains the correct `this` context when used as a callback
+   - When registering with the MCP server, we pass the bound method: `startPaymentCaptureTool.execute`
+
+2. **In Resources**:
+   ```typescript
+   // Example from PaymentStatusResource.ts
+   async read(uri: URL, variables: Record<string, string | string[]>, extra: any): Promise<ResourceReadResult> {
+     // Implementation that retrieves and formats payment status data
+   }
+   ```
+   - Similar to tools, the read method is bound in the constructor
+
+3. **In Prompts**:
+   ```typescript
+   // Example from a prompt class
+   public execute: PromptCallback = (extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> => {
+     // Return prompt content
+   }
+   ```
+   - For prompts, the execute method is typically defined as a class property using arrow function syntax
+   - This automatically binds the method to the class instance
+
+### Parameters in Prompts
+
+Some prompts accept parameters that can be used to customize the prompt content. The StartCapturePrompt is a good example:
+
+1. **Parameter Definition**:
+   ```typescript
+   // In src/index.ts when registering the prompt
+   mcpServer.prompt(
+     "StartCapture",
+     "Prompt for starting the payment capture process",
+     { callSid: z.string().describe("The Twilio Call SID") }, // Parameter schema
+     startCapturePrompt.execute
+   );
+   ```
+   - The third argument defines the parameter schema using Zod
+   - In this case, it requires a `callSid` parameter of type string
+
+2. **Parameter Usage in the Prompt**:
+   ```typescript
+   // In StartCapturePrompt.ts
+   public execute = (args: { callSid: string }, extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> => {
+     const { callSid } = args;
+
+     if (!callSid) {
+       throw new Error("callSid parameter is required");
+     }
+     
+     return {
+       messages: [
+         {
+           role: "assistant",
+           content: {
+             type: "text",
+             text: getStartCapturePromptText(callSid), // Use the parameter in the prompt text
+           }
+         }
+       ]
+     };
+   }
+   ```
+   - The execute method accepts the parameters as its first argument
+   - It can validate the parameters and use them to customize the prompt content
+   - In this case, the callSid is used in the prompt text to provide context
+
+3. **Parameter Validation**:
+   - The prompt validates that required parameters are provided
+   - If a required parameter is missing, it throws an error
+   - This ensures the prompt can only be used with valid parameters
+
+This pattern allows prompts to be dynamic and contextual, providing tailored guidance based on the current state of the payment flow.
+
+### Registration in src/index.ts
+
+The main file (src/index.ts) ties everything together by:
+
+1. Creating instances of all components:
+   ```typescript
+   const startPaymentCaptureTool = new StartPaymentCaptureTool(twilioAgentPaymentServer);
+   const startCapturePrompt = new StartCapturePrompt();
+   const paymentStatusResource = new PaymentStatusResource(twilioAgentPaymentServer);
+   ```
+
+2. Setting up event listeners for logging:
+   ```typescript
+   startPaymentCaptureTool.on(LOG_EVENT, logToMcp);
+   ```
+
+3. Registering components with the MCP server:
+   ```typescript
+   // Register a tool
+   mcpServer.tool(
+     "startPaymentCapture",
+     "Start a new payment capture session",
+     startPaymentCaptureTool.shape,
+     startPaymentCaptureTool.execute
+   );
+
+   // Register a prompt
+   mcpServer.prompt(
+     "StartCapture",
+     "Prompt for starting the payment capture process",
+     { callSid: z.string().describe("The Twilio Call SID") },
+     startCapturePrompt.execute
+   );
+
+   // Register a resource
+   mcpServer.resource(
+     "PaymentStatus",
+     new ResourceTemplate("payment://{callSid}/{paymentSid}/status", { list: undefined }),
+     { description: "Get the current status of a payment session" },
+     paymentStatusResource.read
+   );
+   ```
+
+This centralized registration approach makes it easy to see all available components and their relationships, while keeping the implementation details encapsulated in their respective files.
 
 ## Available Tools
 
