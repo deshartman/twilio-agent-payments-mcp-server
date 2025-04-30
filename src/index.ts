@@ -4,7 +4,6 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { TwilioAgentPaymentServer } from "./api-servers/TwilioAgentPaymentServer.js";
 import { LOG_EVENT, CALLBACK_EVENT, COMPONENT_REGISTERED_EVENT, COMPONENT_ERROR_EVENT } from './constants/events.js';
 import { discoverComponents } from './utils/autoDiscovery.js';
-import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Get configuration parameters from the command line arguments
@@ -57,11 +56,8 @@ const twilioAgentPaymentServer = new TwilioAgentPaymentServer(accountSid, apiKey
 // Start the MCP server
 async function main() {
     try {
-        // Get the current directory path
-        const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
         // Auto-discover and register all components BEFORE connecting
-        await discoverComponents(mcpServer, __dirname, { twilioAgentPaymentServer });
+        await discoverComponents(mcpServer, { twilioAgentPaymentServer });
 
         // Connect the transport after registering all components
         const transport = new StdioServerTransport();

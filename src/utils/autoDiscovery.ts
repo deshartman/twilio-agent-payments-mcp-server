@@ -11,7 +11,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 /**
  * Discover and register all components (tools, prompts, resources) from their respective directories
  */
-export async function discoverComponents(mcpServer: McpServer, basePath: string, dependencies: any) {
+export async function discoverComponents(mcpServer: McpServer, dependencies: any) {
+    // Get the current directory path
+    const basePath: string = path.dirname(fileURLToPath(import.meta.url));
     const { twilioAgentPaymentServer } = dependencies;
 
     await Promise.all([
