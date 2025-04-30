@@ -1,6 +1,6 @@
+import { EventEmitter } from 'events';
 import { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import { PromptCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const SECURITY_CODE_PROMPT_TEXT = `
     # Placeholder: Security Code Capture
@@ -18,22 +18,29 @@ const SECURITY_CODE_PROMPT_TEXT = `
     "Please provide the security code, usually found on the back of the card."
     `;
 
-export class SecurityCodePrompt {
-    /**
-     * The execute method provides the content for the 'SecurityCode' prompt.
-     * It guides the user on how to capture the security code.
-     */
-    public execute: PromptCallback = (extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> => {
-        return {
-            messages: [
-                {
-                    role: "assistant",
-                    content: {
-                        type: "text",
-                        text: SECURITY_CODE_PROMPT_TEXT,
+/**
+ * Direct export for SecurityCode prompt
+ */
+export function securityCodePrompt() {
+    // Create an event emitter for logging
+    const emitter = new EventEmitter();
+    return {
+        name: "SecurityCode",
+        description: "Prompt for capturing the card security code",
+        schema: undefined,
+        execute: function (extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> {
+            return {
+                messages: [
+                    {
+                        role: "assistant",
+                        content: {
+                            type: "text",
+                            text: SECURITY_CODE_PROMPT_TEXT,
+                        }
                     }
-                }
-            ]
-        };
-    }
-}
+                ]
+            };
+        },
+        emitter // For attaching event listeners
+    };
+};

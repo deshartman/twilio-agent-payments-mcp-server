@@ -4,14 +4,11 @@ import { TwilioAgentPaymentServer } from "../api-servers/TwilioAgentPaymentServe
 import { PaymentInstance } from "twilio/lib/rest/api/v2010/account/call/payment.js";
 import { LOG_EVENT } from '../constants/events.js';
 
-// Define the input schema internally using Zod
-const captureExpirationDateSchema = z.object({
+// Define the schema
+const schema = z.object({
     callSid: z.string().describe("The Twilio Call SID"),
     paymentSid: z.string().describe("The Twilio Payment SID"),
 });
-
-// Infer the input type from the Zod schema
-type CaptureExpirationDateInput = z.infer<typeof captureExpirationDateSchema>;
 
 // Define the expected structure for the tool's result
 interface ToolResult {
@@ -20,48 +17,50 @@ interface ToolResult {
     [key: string]: any; // Add index signature for compatibility with SDK
 }
 
-class CaptureExpirationDateTool extends EventEmitter {
-    public readonly shape = captureExpirationDateSchema.shape;
-    private twilioAgentPaymentServer: TwilioAgentPaymentServer;
+/**
+ * Factory function that creates and returns everything needed for the CaptureExpirationDate tool
+ */
+export function captureExpirationDateTool(twilioAgentPaymentServer: TwilioAgentPaymentServer) {
+    // Create an event emitter for logging
+    const emitter = new EventEmitter();
 
-    constructor(twilioAgentPaymentServer: TwilioAgentPaymentServer) {
-        super();
-        this.twilioAgentPaymentServer = twilioAgentPaymentServer;
-        this.execute = this.execute.bind(this);
-    }
+    // Return everything needed for registration
+    return {
+        name: "captureExpirationDate",
+        description: "Start capture of the payment session expiration date",
+        shape: schema.shape,
+        execute: async function execute(params: z.infer<typeof schema>, extra: any): Promise<ToolResult> {
+            try {
+                const { callSid, paymentSid } = params;
 
-    async execute(params: CaptureExpirationDateInput, extra: any): Promise<ToolResult> {
-        try {
-            const { callSid, paymentSid } = params;
+                // Update the payment session
+                const paymentInstance: PaymentInstance | null = await twilioAgentPaymentServer.updatePaySession(
+                    callSid,
+                    paymentSid,
+                    'expiration-date' // Use the literal type directly
+                );
 
-            // Update the payment session
-            const paymentInstance: PaymentInstance | null = await this.twilioAgentPaymentServer.updatePaySession(
-                callSid,
-                paymentSid,
-                'expiration-date' // Use the literal type directly
-            );
+                if (!paymentInstance) {
+                    emitter.emit(LOG_EVENT, { level: 'error', message: `Failed to start capture of expiration date for PaymentSid: ${paymentSid}` });
+                    return {
+                        content: [{ type: "text", text: `Failed to start capture of expiration date` }],
+                        isError: true
+                    };
+                }
 
-            if (!paymentInstance) {
-                this.emit(LOG_EVENT, { level: 'error', message: `Failed to start capture of expiration date for PaymentSid: ${paymentSid}` });
+                emitter.emit(LOG_EVENT, { level: 'info', message: `Started capture of expiration date for PaymentSid: ${paymentSid}` });
                 return {
-                    content: [{ type: "text", text: `Failed to start capture of expiration date` }],
+                    content: [{ type: "text", text: JSON.stringify({ success: true }, null, 2) }]
+                };
+            } catch (error: any) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                emitter.emit(LOG_EVENT, { level: 'error', message: `Error updating payment field for expiration date: ${errorMessage}` });
+                return {
+                    content: [{ type: "text", text: `Error updating payment field: ${errorMessage}` }],
                     isError: true
                 };
             }
-
-            this.emit(LOG_EVENT, { level: 'info', message: `Started capture of expiration date for PaymentSid: ${paymentSid}` });
-            return {
-                content: [{ type: "text", text: JSON.stringify({ success: true }, null, 2) }]
-            };
-        } catch (error: any) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            this.emit(LOG_EVENT, { level: 'error', message: `Error updating payment field for expiration date: ${errorMessage}` });
-            return {
-                content: [{ type: "text", text: `Error updating payment field: ${errorMessage}` }],
-                isError: true
-            };
-        }
+        },
+        emitter // For attaching event listeners
     }
 }
-
-export { CaptureExpirationDateTool };

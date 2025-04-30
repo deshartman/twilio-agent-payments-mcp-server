@@ -1,6 +1,6 @@
+import { EventEmitter } from 'events';
 import { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import { PromptCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const COMPLETION_PROMPT_TEXT = `
     # Placeholder: Payment Capture Completion
@@ -19,22 +19,29 @@ const COMPLETION_PROMPT_TEXT = `
     "Great news! Your payment information has been successfully captured and securely tokenized. The payment will be processed shortly."
     `;
 
-export class CompletionPrompt {
-    /**
-     * The execute method provides the content for the 'Completion' prompt.
-     * It guides the user on how to handle the successful completion of the payment capture process.
-     */
-    public execute: PromptCallback = (extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> => {
-        return {
-            messages: [
-                {
-                    role: "assistant",
-                    content: {
-                        type: "text",
-                        text: COMPLETION_PROMPT_TEXT,
+/**
+ * Direct export for Completion prompt
+ */
+export function completionPrompt() {
+    // Create an event emitter for logging
+    const emitter = new EventEmitter();
+    return {
+        name: "Completion",
+        description: "Prompt for payment capture completion",
+        schema: undefined,
+        execute: function (extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> {
+            return {
+                messages: [
+                    {
+                        role: "assistant",
+                        content: {
+                            type: "text",
+                            text: COMPLETION_PROMPT_TEXT,
+                        }
                     }
-                }
-            ]
-        };
-    }
-}
+                ]
+            };
+        },
+        emitter // For attaching event listeners
+    };
+};

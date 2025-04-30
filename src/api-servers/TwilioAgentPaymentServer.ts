@@ -166,7 +166,6 @@ class TwilioAgentPaymentServer extends EventEmitter {
             this.statusCallbackUrl = await this.callbackHandler.start();
             // this.emit(LOG_EVENT, { level: 'info', message: `Callback server started at: ${this.statusCallbackUrl}` });
         } catch (error) {
-            console.error('Error starting callback server:', error);
             this.emit(LOG_EVENT, { level: 'error', message: `Error starting callback server: ${error}` });
             throw error;
         }

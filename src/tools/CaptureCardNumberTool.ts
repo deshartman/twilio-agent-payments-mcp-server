@@ -1,94 +1,86 @@
-import { EventEmitter } from 'events'; // Import EventEmitter
-import { z } from 'zod'; // Import Zod
+import { EventEmitter } from 'events';
+import { z } from 'zod';
 import { TwilioAgentPaymentServer } from "../api-servers/TwilioAgentPaymentServer.js";
 import { PaymentInstance } from "twilio/lib/rest/api/v2010/account/call/payment.js";
 import { LOG_EVENT } from '../constants/events.js';
 
-// Define the input schema internally using Zod
-const captureCardNumberSchema = z.object({
+// Define the schema
+const schema = z.object({
     callSid: z.string().describe("The Twilio Call SID"),
     paymentSid: z.string().describe("The Twilio Payment SID"),
 });
 
-// Infer the input type from the Zod schema
-type CaptureCardNumberInput = z.infer<typeof captureCardNumberSchema>;
-
-// Define the expected structure for the tool's result (matching original callback + SDK expectation)
+// Define the expected structure for the tool's result
 interface ToolResult {
     content: Array<{ type: "text"; text: string; }>;
     isError?: boolean;
     [key: string]: any; // Add index signature for compatibility with SDK
 }
 
-class CaptureCardNumberTool extends EventEmitter {
-    // Add a public property to hold the schema shape
-    public readonly shape = captureCardNumberSchema.shape;
+/**
+ * Factory function that creates and returns everything needed for the CaptureCardNumber tool
+ */
+export function captureCardNumberTool(twilioAgentPaymentServer: TwilioAgentPaymentServer) {
+    // Create an event emitter for logging
+    const emitter = new EventEmitter();
 
-    private twilioAgentPaymentServer: TwilioAgentPaymentServer;
+    // Return everything needed for registration
+    return {
+        name: "captureCardNumber",
+        description: "Start capture of the payment session card number",
+        shape: schema.shape,
+        execute: async function execute(params: z.infer<typeof schema>, extra: any): Promise<ToolResult> {
+            try {
+                const { callSid, paymentSid } = params;
 
-    constructor(
-        twilioAgentPaymentServer: TwilioAgentPaymentServer,
-    ) {
-        super(); // Call EventEmitter constructor
-        this.twilioAgentPaymentServer = twilioAgentPaymentServer;
+                // Update the payment session
+                const paymentInstance: PaymentInstance | null = await twilioAgentPaymentServer.updatePaySession(
+                    callSid,
+                    paymentSid,
+                    'payment-card-number' // Use the literal type directly
+                );
 
-        // Bind the execute method to ensure 'this' context is correct when used as a callback
-        this.execute = this.execute.bind(this);
-    }
+                if (!paymentInstance) {
+                    emitter.emit(LOG_EVENT, { level: 'error', message: `Failed to start capture of card number for PaymentSid: ${paymentSid}` });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Failed to start capture of card number`
+                            }
+                        ],
+                        isError: true
+                    };
+                }
 
-    // Define as a regular async method with explicit parameter and return types
-    async execute(params: CaptureCardNumberInput, extra: any): Promise<ToolResult> {
-        try {
-            // params should be correctly typed as CaptureCardNumberInput here
-            const { callSid, paymentSid } = params;
-
-            // Update the payment session
-            const paymentInstance: PaymentInstance | null = await this.twilioAgentPaymentServer.updatePaySession(
-                callSid,
-                paymentSid,
-                'payment-card-number' // Use the literal type directly
-            );
-
-            if (!paymentInstance) {
-                this.emit(LOG_EVENT, { level: 'error', message: `Failed to start capture of card number for PaymentSid: ${paymentSid}` }); // Emit log event
+                // Return success
+                emitter.emit(LOG_EVENT, { level: 'info', message: `Started capture of card number for PaymentSid: ${paymentSid}` });
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Failed to start capture of card number`
+                            text: JSON.stringify({
+                                success: true,
+                            }, null, 2)
+                        }
+                    ]
+                };
+            } catch (error: any) {
+                // Log the error
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                emitter.emit(LOG_EVENT, { level: 'error', message: `Error updating payment field for card number: ${errorMessage}` });
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Error updating payment field: ${errorMessage}`
                         }
                     ],
                     isError: true
                 };
             }
-
-            // Return success
-            this.emit(LOG_EVENT, { level: 'info', message: `Started capture of card number for PaymentSid: ${paymentSid}` }); // Emit log event
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: JSON.stringify({
-                            success: true,
-                        }, null, 2)
-                    }
-                ]
-            };
-        } catch (error: any) {
-            // Log the error
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            this.emit(LOG_EVENT, { level: 'error', message: `Error updating payment field for card number: ${errorMessage}` }); // Emit log event
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Error updating payment field: ${errorMessage}`
-                    }
-                ],
-                isError: true
-            };
-        }
+        },
+        emitter // For attaching event listeners
     }
-}
 
-export { CaptureCardNumberTool };
+}

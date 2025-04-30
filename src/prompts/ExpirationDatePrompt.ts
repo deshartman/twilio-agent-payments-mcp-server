@@ -1,6 +1,6 @@
+import { EventEmitter } from 'events';
 import { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import { PromptCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const EXPIRATION_DATE_PROMPT_TEXT = `
     # Placeholder: Expiration Date Capture
@@ -18,22 +18,29 @@ const EXPIRATION_DATE_PROMPT_TEXT = `
     "Please provide the expiration date in MM/YY format."
     `;
 
-export class ExpirationDatePrompt {
-    /**
-     * The execute method provides the content for the 'ExpirationDate' prompt.
-     * It guides the user on how to capture the expiration date.
-     */
-    public execute: PromptCallback = (extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> => {
-        return {
-            messages: [
-                {
-                    role: "assistant",
-                    content: {
-                        type: "text",
-                        text: EXPIRATION_DATE_PROMPT_TEXT,
+/**
+ * Direct export for ExpirationDate prompt
+ */
+export function expirationDatePrompt() {
+    // Create an event emitter for logging
+    const emitter = new EventEmitter();
+    return {
+        name: "ExpirationDate",
+        description: "Prompt for capturing the card expiration date",
+        schema: undefined,
+        execute: function (extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> {
+            return {
+                messages: [
+                    {
+                        role: "assistant",
+                        content: {
+                            type: "text",
+                            text: EXPIRATION_DATE_PROMPT_TEXT,
+                        }
                     }
-                }
-            ]
-        };
-    }
-}
+                ]
+            };
+        },
+        emitter // For attaching event listeners
+    };
+};

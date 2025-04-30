@@ -1,6 +1,6 @@
+import { EventEmitter } from 'events';
 import { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import { PromptCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const ERROR_PROMPT_TEXT = `
     # Placeholder: Error Handling
@@ -19,22 +19,29 @@ const ERROR_PROMPT_TEXT = `
     "I'm sorry, but there was an issue processing that information. Let's try again."
     `;
 
-export class ErrorPrompt {
-    /**
-     * The execute method provides the content for the 'Error' prompt.
-     * It guides the user on how to handle errors during the payment capture process.
-     */
-    public execute: PromptCallback = (extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> => {
-        return {
-            messages: [
-                {
-                    role: "assistant",
-                    content: {
-                        type: "text",
-                        text: ERROR_PROMPT_TEXT,
+/**
+ * Direct export for Error prompt
+ */
+export function errorPrompt() {
+    // Create an event emitter for logging
+    const emitter = new EventEmitter();
+    return {
+        name: "Error",
+        description: "Prompt for handling errors during payment capture",
+        schema: undefined,
+        execute: function (extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> {
+            return {
+                messages: [
+                    {
+                        role: "assistant",
+                        content: {
+                            type: "text",
+                            text: ERROR_PROMPT_TEXT,
+                        }
                     }
-                }
-            ]
-        };
-    }
-}
+                ]
+            };
+        },
+        emitter // For attaching event listeners
+    };
+};

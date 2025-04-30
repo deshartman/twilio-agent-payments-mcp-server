@@ -1,6 +1,6 @@
+import { EventEmitter } from 'events';
 import { GetPromptResult } from "@modelcontextprotocol/sdk/types.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import { PromptCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 const CARD_NUMBER_PROMPT_TEXT = `
     # Placeholder: Card Number Capture
@@ -18,22 +18,29 @@ const CARD_NUMBER_PROMPT_TEXT = `
     "Please provide the card number."
     `;
 
-export class CardNumberPrompt {
-    /**
-     * The execute method provides the content for the 'CardNumber' prompt.
-     * It guides the user on how to capture the card number.
-     */
-    public execute: PromptCallback = (extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> => {
-        return {
-            messages: [
-                {
-                    role: "assistant",
-                    content: {
-                        type: "text",
-                        text: CARD_NUMBER_PROMPT_TEXT,
+/**
+ * Direct export for CardNumber prompt
+ */
+export function cardNumberPrompt() {
+    // Create an event emitter for logging
+    const emitter = new EventEmitter();
+    return {
+        name: "CardNumber",
+        description: "Prompt for capturing the card number",
+        schema: undefined,
+        execute: function (extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> {
+            return {
+                messages: [
+                    {
+                        role: "assistant",
+                        content: {
+                            type: "text",
+                            text: CARD_NUMBER_PROMPT_TEXT,
+                        }
                     }
-                }
-            ]
-        };
-    }
-}
+                ]
+            };
+        },
+        emitter // For attaching event listeners
+    };
+};

@@ -1,89 +1,82 @@
-import { EventEmitter } from 'events'; // Import EventEmitter
-import { z } from 'zod'; // Import Zod
+import { EventEmitter } from 'events';
+import { z } from 'zod';
 import { TwilioAgentPaymentServer } from "../api-servers/TwilioAgentPaymentServer.js";
 import { PaymentInstance } from "twilio/lib/rest/api/v2010/account/call/payment.js";
 import { LOG_EVENT } from '../constants/events.js';
 
-// Define the input schema internally using Zod
-const startPaymentCaptureSchema = z.object({
+// Define the schema
+const schema = z.object({
     callSid: z.string().describe("The Twilio Call SID")
 });
 
-// Infer the input type from the Zod schema
-type StartPaymentCaptureInput = z.infer<typeof startPaymentCaptureSchema>;
-
-// Define the expected structure for the tool's result (matching original callback + SDK expectation)
+// Define the expected structure for the tool's result
 interface ToolResult {
     content: Array<{ type: "text"; text: string; }>;
     isError?: boolean;
     [key: string]: any; // Add index signature for compatibility with SDK
 }
 
-class StartPaymentCaptureTool extends EventEmitter {
-    // Add a public property to hold the schema shape
-    public readonly shape = startPaymentCaptureSchema.shape;
+/**
+ * Factory function that creates and returns everything needed for the StartPaymentCapture tool
+ */
+export function startPaymentCaptureTool(twilioAgentPaymentServer: TwilioAgentPaymentServer) {
+    // Create an event emitter for logging
+    const emitter = new EventEmitter();
 
-    private twilioAgentPaymentServer: TwilioAgentPaymentServer;
+    // tool<Args extends ZodRawShape>(name: string, description: string, paramsSchema: Args, cb: ToolCallback<Args>): void;
 
-    constructor(
-        twilioAgentPaymentServer: TwilioAgentPaymentServer,
-    ) {
-        super(); // Call EventEmitter constructor
-        this.twilioAgentPaymentServer = twilioAgentPaymentServer;
+    // Return everything needed for registration
+    return {
+        name: "startPaymentCapture",
+        description: "Start a new payment capture session",
+        shape: schema.shape,
+        execute: async function execute(params: z.infer<typeof schema>, extra: any): Promise<ToolResult> {
+            try {
+                const { callSid } = params;
 
-        // Bind the execute method to ensure 'this' context is correct when used as a callback
-        this.execute = this.execute.bind(this);
-    }
+                // Start the payment capture and get the payment session Sid
+                const paymentInstance: PaymentInstance | null = await twilioAgentPaymentServer.startCapture(callSid);
 
-    // Define as a regular async method with explicit parameter and return types
-    async execute(params: StartPaymentCaptureInput, extra: any): Promise<ToolResult> {
-        try {
-            // params should be correctly typed as StartPaymentCaptureInput here
-            const { callSid } = params;
+                if (!paymentInstance) {
+                    emitter.emit(LOG_EVENT, { level: 'error', message: `Failed to start payment capture session for CallSid: ${callSid}` });
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: "Failed to start payment capture session."
+                            }
+                        ],
+                        isError: true
+                    };
+                }
 
-            // Start the payment capture and get the payment session Sid
-            const paymentInstance: PaymentInstance | null = await this.twilioAgentPaymentServer.startCapture(callSid);
-
-            if (!paymentInstance) {
-                this.emit(LOG_EVENT, { level: 'error', message: `Failed to start payment capture session for CallSid: ${callSid}` }); // Emit log event
+                // Return the payment SID and prompt
+                emitter.emit(LOG_EVENT, { level: 'info', message: `Started payment capture session ${paymentInstance.sid} for CallSid: ${callSid}` });
                 return {
                     content: [
                         {
                             type: "text",
-                            text: "Failed to start payment capture session."
+                            text: JSON.stringify({
+                                paymentSid: paymentInstance.sid,
+                            }, null, 2)
+                        }
+                    ]
+                };
+            } catch (error: any) {
+                // Log the error
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                emitter.emit(LOG_EVENT, { level: 'error', message: `Error starting payment capture: ${errorMessage}` });
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: `Error starting payment capture: ${errorMessage}`
                         }
                     ],
                     isError: true
                 };
             }
-
-            // Return the payment SID and prompt
-            this.emit(LOG_EVENT, { level: 'info', message: `Started payment capture session ${paymentInstance.sid} for CallSid: ${callSid}` }); // Emit log event
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: JSON.stringify({
-                            paymentSid: paymentInstance.sid,
-                        }, null, 2)
-                    }
-                ]
-            };
-        } catch (error: any) {
-            // Log the error
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            this.emit(LOG_EVENT, { level: 'error', message: `Error starting payment capture: ${errorMessage}` }); // Emit log event
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: `Error starting payment capture: ${errorMessage}`
-                    }
-                ],
-                isError: true
-            };
-        }
+        },
+        emitter // For attaching event listeners
     }
 }
-
-export { StartPaymentCaptureTool };
