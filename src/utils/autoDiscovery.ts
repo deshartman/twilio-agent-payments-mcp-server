@@ -11,22 +11,21 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 /**
  * Discover and register all components (tools, prompts, resources) from their respective directories
  */
-export async function discoverComponents(mcpServer: McpServer, dependencies: any) {
+export async function discoverComponents(mcpServer: McpServer) {
     // Get the current directory path
     const basePath: string = path.dirname(fileURLToPath(import.meta.url));
-    const { twilioAgentPaymentServer } = dependencies;
 
     await Promise.all([
-        discoverTools(mcpServer, path.join(basePath, 'tools'), twilioAgentPaymentServer),
-        discoverPrompts(mcpServer, path.join(basePath, 'prompts')),
-        discoverResources(mcpServer, path.join(basePath, 'resources'), twilioAgentPaymentServer)
+        discoverTools(mcpServer, path.join(basePath, '../tools')),
+        discoverPrompts(mcpServer, path.join(basePath, '../prompts')),
+        discoverResources(mcpServer, path.join(basePath, '../resources'))
     ]);
 }
 
 /**
  * Discover and register all tools from the tools directory
  */
-async function discoverTools(mcpServer: McpServer, toolsPath: string, twilioAgentPaymentServer: any) {
+async function discoverTools(mcpServer: McpServer, toolsPath: string) {
     try {
         // Get all .js files in the tools directory
         const files = fs.readdirSync(toolsPath).filter(file => file.endsWith('.js'));
@@ -45,8 +44,8 @@ async function discoverTools(mcpServer: McpServer, toolsPath: string, twilioAgen
                     }
 
                     try {
-                        // Call the function with dependencies
-                        const tool = exportedValue(twilioAgentPaymentServer);
+                        // Call the function without dependencies
+                        const tool = exportedValue();
 
                         // Verify it has the expected structure
                         if (!tool || !tool.name || !tool.description || !tool.shape || !tool.execute) {
@@ -126,7 +125,7 @@ async function discoverPrompts(mcpServer: McpServer, promptsPath: string) {
 /**
  * Discover and register all resources from the resources directory
  */
-async function discoverResources(mcpServer: McpServer, resourcesPath: string, twilioAgentPaymentServer: any) {
+async function discoverResources(mcpServer: McpServer, resourcesPath: string) {
     try {
         // Get all .js files in the resources directory
         const files = fs.readdirSync(resourcesPath).filter(file => file.endsWith('.js'));
@@ -145,8 +144,8 @@ async function discoverResources(mcpServer: McpServer, resourcesPath: string, tw
                     }
 
                     try {
-                        // Call the function with dependencies
-                        const resource = exportedValue(twilioAgentPaymentServer);
+                        // Call the function without dependencies
+                        const resource = exportedValue();
 
                         // Verify it has the expected structure
                         if (!resource || !resource.name || !resource.template || !resource.description || !resource.read) {

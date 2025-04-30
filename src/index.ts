@@ -50,14 +50,14 @@ const logToMcp = (data: { level: string, message: string }) => {
     });
 };
 
-// Create the Twilio AgentPayment Server instance
-const twilioAgentPaymentServer = new TwilioAgentPaymentServer(accountSid, apiKey, apiSecret);
+// Initialize the Twilio AgentPayment Server singleton
+const twilioAgentPaymentServer = TwilioAgentPaymentServer.initialize(accountSid, apiKey, apiSecret);
 
 // Start the MCP server
 async function main() {
     try {
         // Auto-discover and register all components BEFORE connecting
-        await discoverComponents(mcpServer, { twilioAgentPaymentServer });
+        await discoverComponents(mcpServer);
 
         // Connect the transport after registering all components
         const transport = new StdioServerTransport();

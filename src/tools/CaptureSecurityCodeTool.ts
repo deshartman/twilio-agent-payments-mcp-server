@@ -20,7 +20,10 @@ interface ToolResult {
 /**
  * Factory function that creates and returns everything needed for the CaptureSecurityCode tool
  */
-export function captureSecurityCodeTool(twilioAgentPaymentServer: TwilioAgentPaymentServer) {
+export function captureSecurityCodeTool() {
+
+    // Get the TwilioAgentPaymentServer instance
+    const twilioAgentPaymentServer = TwilioAgentPaymentServer.getInstance();
     // Create an event emitter for logging
     const emitter = new EventEmitter();
 

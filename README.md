@@ -217,62 +217,163 @@ The server implementation is split across several directories:
 
 1. **src/index.ts**: The main entry point that:
    - Initializes the MCP server
-   - Creates instances of all tools, resources, and prompts
-   - Registers these components with the MCP server
+   - Initializes the TwilioAgentPaymentServer singleton
+   - Discovers and registers all components with the MCP server via auto-discovery
    - Sets up event listeners for logging
    - Connects the server to the transport layer
 
 2. **src/tools/**: Contains individual tool implementations
-   - Each tool is implemented as a class that extends EventEmitter
+   - Each tool is implemented as a factory function that returns an object with name, description, shape, and execute properties
    - Tools handle specific payment operations (e.g., StartPaymentCaptureTool, CaptureCardNumberTool)
    - Each tool defines its input schema using Zod and implements an execute method
+   - Tools access the TwilioAgentPaymentServer singleton via getInstance()
 
 3. **src/prompts/**: Contains prompt implementations
-   - Each prompt is implemented as a class with an execute method
+   - Each prompt is implemented as a factory function that returns an object with name, description, and execute properties
    - Prompts provide contextual guidance to the LLM for each step of the payment flow
    - Some prompts accept parameters that can be used to customize the prompt content
 
 4. **src/resources/**: Contains resource implementations
    - Resources provide access to data (e.g., PaymentStatusResource)
-   - Each resource implements a read method that retrieves and formats data
+   - Each resource is implemented as a factory function that returns an object with name, template, description, and read properties
+   - Resources access the TwilioAgentPaymentServer singleton via getInstance()
 
 5. **src/api-servers/**: Contains the implementation of the Twilio API client
+   - Implements the TwilioAgentPaymentServer as a singleton
    - Handles communication with the Twilio API
    - Manages payment session state
+   - Provides static methods for accessing the singleton instance
 
-### The `.execute` Method Pattern
+6. **src/utils/**: Contains utility functions
+   - The autoDiscovery.ts file handles automatic discovery and registration of tools, prompts, and resources
 
-A key architectural pattern in this codebase is the use of the `.execute` method:
+### Singleton Pattern for TwilioAgentPaymentServer
+
+A key architectural pattern in this codebase is the use of the Singleton pattern for the TwilioAgentPaymentServer:
+
+```typescript
+class TwilioAgentPaymentServer extends EventEmitter {
+    // Singleton instance
+    private static instance: TwilioAgentPaymentServer | null = null;
+
+    /**
+     * Static method to get the instance
+     */
+    public static getInstance(): TwilioAgentPaymentServer {
+        if (!TwilioAgentPaymentServer.instance) {
+            throw new Error('TwilioAgentPaymentServer not initialized. Call initialize() first.');
+        }
+        return TwilioAgentPaymentServer.instance;
+    }
+    
+    /**
+     * Static method to initialize the instance
+     */
+    public static initialize(accountSid: string, apiKey: string, apiSecret: string): TwilioAgentPaymentServer {
+        if (!TwilioAgentPaymentServer.instance) {
+            TwilioAgentPaymentServer.instance = new TwilioAgentPaymentServer(accountSid, apiKey, apiSecret);
+        }
+        return TwilioAgentPaymentServer.instance;
+    }
+
+    // Private constructor to prevent direct instantiation
+    private constructor(accountSid: string, apiKey: string, apiSecret: string) {
+        // Initialization code...
+    }
+}
+```
+
+Benefits of this approach:
+- Ensures there's only one instance of TwilioAgentPaymentServer throughout the application
+- Eliminates the need to pass the instance through multiple functions
+- Provides a cleaner API with simpler function signatures
+- Makes it easier to access the TwilioAgentPaymentServer from anywhere in the codebase
+
+### Factory Function Pattern
+
+Tools, prompts, and resources are implemented using the factory function pattern:
 
 1. **In Tools**: 
    ```typescript
    // Example from StartPaymentCaptureTool.ts
-   async execute(params: StartPaymentCaptureInput, extra: any): Promise<ToolResult> {
-     // Implementation that calls Twilio API and returns result
+   export function startPaymentCaptureTool() {
+       // Get the TwilioAgentPaymentServer instance
+       const twilioAgentPaymentServer = TwilioAgentPaymentServer.getInstance();
+       
+       // Create an event emitter for logging
+       const emitter = new EventEmitter();
+       
+       return {
+           name: "startPaymentCapture",
+           description: "Start a new payment capture session",
+           shape: schema.shape,
+           execute: async function execute(params: z.infer<typeof schema>, extra: any): Promise<ToolResult> {
+               // Implementation that calls Twilio API and returns result
+           },
+           emitter // For attaching event listeners
+       }
    }
    ```
-   - The execute method is bound to the class instance in the constructor: `this.execute = this.execute.bind(this);`
-   - This ensures the method maintains the correct `this` context when used as a callback
-   - When registering with the MCP server, we pass the bound method: `startPaymentCaptureTool.execute`
 
 2. **In Resources**:
    ```typescript
    // Example from PaymentStatusResource.ts
-   async read(uri: URL, variables: Record<string, string | string[]>, extra: any): Promise<ResourceReadResult> {
-     // Implementation that retrieves and formats payment status data
+   export function paymentStatusResource() {
+       // Get the TwilioAgentPaymentServer instance
+       const twilioAgentPaymentServer = TwilioAgentPaymentServer.getInstance();
+       
+       // Create an event emitter for logging
+       const emitter = new EventEmitter();
+       
+       return {
+           name: "PaymentStatus",
+           template: new ResourceTemplate("payment://{callSid}/{paymentSid}/status", { list: undefined }),
+           description: "Get the current status of a payment session",
+           read: async (uri: URL, variables: Record<string, string | string[]>, extra: any): Promise<ResourceReadResult> => {
+               // Implementation that retrieves and formats payment status data
+           },
+           emitter // For attaching event listeners
+       };
    }
    ```
-   - Similar to tools, the read method is bound in the constructor
 
 3. **In Prompts**:
    ```typescript
-   // Example from a prompt class
-   public execute: PromptCallback = (extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> => {
-     // Return prompt content
+   // Example from a prompt factory function
+   export function startCapturePrompt() {
+       return {
+           name: "StartCapture",
+           description: "Prompt for starting the payment capture process",
+           execute: (args: { callSid: string }, extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> => {
+               // Return prompt content
+           }
+       };
    }
    ```
-   - For prompts, the execute method is typically defined as a class property using arrow function syntax
-   - This automatically binds the method to the class instance
+
+### Auto-Discovery and Registration
+
+The server uses an auto-discovery mechanism to find and register all components:
+
+```typescript
+// In src/utils/autoDiscovery.ts
+export async function discoverComponents(mcpServer: McpServer) {
+    // Get the current directory path
+    const basePath: string = path.dirname(fileURLToPath(import.meta.url));
+
+    await Promise.all([
+        discoverTools(mcpServer, path.join(basePath, '../tools')),
+        discoverPrompts(mcpServer, path.join(basePath, '../prompts')),
+        discoverResources(mcpServer, path.join(basePath, '../resources'))
+    ]);
+}
+```
+
+This approach:
+- Automatically finds all tools, prompts, and resources in their respective directories
+- Dynamically imports and registers them with the MCP server
+- Makes it easy to add new components without modifying the main file
+- Reduces boilerplate code and improves maintainability
 
 ### Parameters in Prompts
 
@@ -280,21 +381,22 @@ Some prompts accept parameters that can be used to customize the prompt content.
 
 1. **Parameter Definition**:
    ```typescript
-   // In src/index.ts when registering the prompt
-   mcpServer.prompt(
-     "StartCapture",
-     "Prompt for starting the payment capture process",
-     { callSid: z.string().describe("The Twilio Call SID") }, // Parameter schema
-     startCapturePrompt.execute
-   );
+   // In the prompt factory function
+   return {
+       name: "StartCapture",
+       description: "Prompt for starting the payment capture process",
+       schema: { callSid: z.string().describe("The Twilio Call SID") }, // Parameter schema
+       execute: (args: { callSid: string }, extra: RequestHandlerExtra) => {
+           // Implementation
+       }
+   };
    ```
-   - The third argument defines the parameter schema using Zod
+   - The schema property defines the parameter schema using Zod
    - In this case, it requires a `callSid` parameter of type string
 
 2. **Parameter Usage in the Prompt**:
    ```typescript
-   // In StartCapturePrompt.ts
-   public execute = (args: { callSid: string }, extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> => {
+   execute: (args: { callSid: string }, extra: RequestHandlerExtra): GetPromptResult | Promise<GetPromptResult> => {
      const { callSid } = args;
 
      if (!callSid) {
@@ -318,57 +420,7 @@ Some prompts accept parameters that can be used to customize the prompt content.
    - It can validate the parameters and use them to customize the prompt content
    - In this case, the callSid is used in the prompt text to provide context
 
-3. **Parameter Validation**:
-   - The prompt validates that required parameters are provided
-   - If a required parameter is missing, it throws an error
-   - This ensures the prompt can only be used with valid parameters
-
 This pattern allows prompts to be dynamic and contextual, providing tailored guidance based on the current state of the payment flow.
-
-### Registration in src/index.ts
-
-The main file (src/index.ts) ties everything together by:
-
-1. Creating instances of all components:
-   ```typescript
-   const startPaymentCaptureTool = new StartPaymentCaptureTool(twilioAgentPaymentServer);
-   const startCapturePrompt = new StartCapturePrompt();
-   const paymentStatusResource = new PaymentStatusResource(twilioAgentPaymentServer);
-   ```
-
-2. Setting up event listeners for logging:
-   ```typescript
-   startPaymentCaptureTool.on(LOG_EVENT, logToMcp);
-   ```
-
-3. Registering components with the MCP server:
-   ```typescript
-   // Register a tool
-   mcpServer.tool(
-     "startPaymentCapture",
-     "Start a new payment capture session",
-     startPaymentCaptureTool.shape,
-     startPaymentCaptureTool.execute
-   );
-
-   // Register a prompt
-   mcpServer.prompt(
-     "StartCapture",
-     "Prompt for starting the payment capture process",
-     { callSid: z.string().describe("The Twilio Call SID") },
-     startCapturePrompt.execute
-   );
-
-   // Register a resource
-   mcpServer.resource(
-     "PaymentStatus",
-     new ResourceTemplate("payment://{callSid}/{paymentSid}/status", { list: undefined }),
-     { description: "Get the current status of a payment session" },
-     paymentStatusResource.read
-   );
-   ```
-
-This centralized registration approach makes it easy to see all available components and their relationships, while keeping the implementation details encapsulated in their respective files.
 
 ## Available Tools
 

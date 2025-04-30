@@ -84,7 +84,44 @@ class TwilioAgentPaymentServer extends EventEmitter {
     currency: string;
     paymentConnector: string;
 
-    constructor(accountSid: string, apiKey: string, apiSecret: string) {
+    // Singleton instance
+    private static instance: TwilioAgentPaymentServer | null = null;
+
+    /**
+     * Static method to get the instance
+     * @returns The singleton instance of TwilioAgentPaymentServer
+     * @throws Error if the instance has not been initialized
+     */
+    public static getInstance(): TwilioAgentPaymentServer {
+        if (!TwilioAgentPaymentServer.instance) {
+            throw new Error('TwilioAgentPaymentServer not initialized. Call initialize() first.');
+        }
+        return TwilioAgentPaymentServer.instance;
+    }
+
+    /**
+     * Static method to initialize the instance
+     * @param accountSid - Twilio account SID
+     * @param apiKey - Twilio API Key
+     * @param apiSecret - Twilio API Secret
+     * @returns The singleton instance of TwilioAgentPaymentServer
+     */
+    public static initialize(accountSid: string, apiKey: string, apiSecret: string): TwilioAgentPaymentServer {
+        if (!TwilioAgentPaymentServer.instance) {
+            TwilioAgentPaymentServer.instance = new TwilioAgentPaymentServer(accountSid, apiKey, apiSecret);
+        }
+        return TwilioAgentPaymentServer.instance;
+    }
+
+    /**
+     * Reset the singleton instance (primarily for testing purposes)
+     */
+    public static reset(): void {
+        TwilioAgentPaymentServer.instance = null;
+    }
+
+    // Private constructor to prevent direct instantiation
+    private constructor(accountSid: string, apiKey: string, apiSecret: string) {
         super();
         this.accountSid = accountSid;
         this.apiKey = apiKey;

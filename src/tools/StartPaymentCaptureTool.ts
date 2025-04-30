@@ -19,7 +19,10 @@ interface ToolResult {
 /**
  * Factory function that creates and returns everything needed for the StartPaymentCapture tool
  */
-export function startPaymentCaptureTool(twilioAgentPaymentServer: TwilioAgentPaymentServer) {
+export function startPaymentCaptureTool() {
+
+    // Get the TwilioAgentPaymentServer instance
+    const twilioAgentPaymentServer = TwilioAgentPaymentServer.getInstance();
     // Create an event emitter for logging
     const emitter = new EventEmitter();
 

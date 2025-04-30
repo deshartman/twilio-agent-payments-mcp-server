@@ -17,7 +17,10 @@ interface ResourceReadResult {
 /**
  * Factory function that creates and returns everything needed for the PaymentStatus resource
  */
-export function paymentStatusResource(twilioAgentPaymentServer: TwilioAgentPaymentServer) {
+export function paymentStatusResource() {
+
+    // Get the TwilioAgentPaymentServer instance
+    const twilioAgentPaymentServer = TwilioAgentPaymentServer.getInstance();
     // Create an event emitter for logging
     const emitter = new EventEmitter();
 

@@ -20,7 +20,10 @@ interface ToolResult {
 /**
  * Factory function that creates and returns everything needed for the CaptureExpirationDate tool
  */
-export function captureExpirationDateTool(twilioAgentPaymentServer: TwilioAgentPaymentServer) {
+export function captureExpirationDateTool() {
+
+    // Get the TwilioAgentPaymentServer instance
+    const twilioAgentPaymentServer = TwilioAgentPaymentServer.getInstance();
     // Create an event emitter for logging
     const emitter = new EventEmitter();
 
