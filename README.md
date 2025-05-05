@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/deshartman-twilio-agent-payments-mcp-server-badge.png)](https://mseep.ai/app/deshartman-twilio-agent-payments-mcp-server)
+
 # Twilio Agent Payments MCP Server
 
 An MCP (Model Context Protocol) server that enables handling agent-assisted payments via the Twilio API, with enhanced features for asynchronous callbacks and guided workflow through contextual prompts.
